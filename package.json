@@ -1,14 +1,29 @@
 {
-  "name": "temu-stark-holo",
+  "name": "stark-hologram",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Hand-tracking controlled 3D holographic interface with Flask, Three.js, and MediaPipe",
+  "main": "app.py",
   "scripts": {
+    "start": "python app.py",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "hand-tracking",
+    "hologram",
+    "threejs",
+    "mediapipe",
+    "flask",
+    "gesture-control",
+    "3d-visualization",
+    "webcam",
+    "interactive"
+  ],
+  "author": "adeel1608",
   "license": "ISC",
-  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adeel1608/stark-hologram.git"
+  },
   "dependencies": {
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/hands": "^0.4.1675469240",

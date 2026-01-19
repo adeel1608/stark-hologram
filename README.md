@@ -2,6 +2,8 @@
 
 A hand-tracking controlled 3D holographic interface built with Flask, Three.js, and MediaPipe. Interact with a holographic building visualization using natural hand gestures in real-time.
 
+**Repository**: https://github.com/adeel1608/stark-hologram
+
 ## Features
 
 - **Hand Tracking**: Real-time hand gesture recognition using MediaPipe
@@ -27,6 +29,12 @@ A hand-tracking controlled 3D holographic interface built with Flask, Three.js, 
 1. Clone the repository:
 ```bash
 git clone https://github.com/adeel1608/stark-hologram.git
+cd stark-hologram
+```
+
+Or if you prefer SSH:
+```bash
+git clone git@github.com:adeel1608/stark-hologram.git
 cd stark-hologram
 ```
 
