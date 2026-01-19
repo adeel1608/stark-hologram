@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Temu Stark Holo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="icon" href="/static/favicon.ico" />
+
+  <!-- MediaPipe -->
+  <script src="/static/vendor/hands.js"></script>
+  <script src="/static/vendor/camera_utils.js"></script>
+</head>
+<body>
+  <div id="wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+
+    <div id="hud">
+      <div class="title">TEMU STARK HOLO</div>
+      <div id="status">booting...</div>
+      <div class="hint">
+        ✊ One-hand FIST: move<br/>
+        🤏 One-hand pinch: select floor / pull selected (drag L/R)<br/>
+        🤏🤏 Two-hand pinch: rotate + scale<br/>
+        🤏🤏 + hands up/down: explode floors<br/>
+        🖐 Open palm (idle): toggle wireframe<br/>
+        R: reset
+      </div>
+    </div>
+  </div>
+
+  <!-- cache bust -->
+  <script type="module" src="/static/app.js?v=1001"></script>
+</body>
+</html>
+
