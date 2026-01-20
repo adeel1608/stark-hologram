@@ -1,78 +1,90 @@
 import * as THREE from "./vendor/three.module.js";
 
 const statusEl = document.getElementById("status");
+const depthStatusEl = document.getElementById("depthStatus");
 const video = document.getElementById("video");
 const overlay = document.getElementById("overlay");
 const ctx = overlay.getContext("2d");
 
-// ===================== CONFIG =====================
-// Camera / tracking
+// ===================== CONFIG SECTION =====================
+// All tunable parameters in one place
+
+// Camera / Tracking
 const MIRROR_INPUT = true;
-const LANDMARK_SMOOTH = 0.50; // smoother = less jitter
-const JUNK_JUMP_PX = 160;     // ignore big jumps (tracking loss)
+const LANDMARK_SMOOTH = 0.50;        // Hand smoothing (0-1, higher = smoother but laggy)
+const JUNK_JUMP_PX = 160;            // Ignore tracking jumps larger than this
 
-// Gesture thresholds (PRO)
-// Pinch hysteresis: ON is tighter, OFF is looser (stops flicker)
-const PINCH_ON_PX  = 34;
-const PINCH_OFF_PX = 48;
+// Gesture Thresholds
+const PINCH_ON_PX  = 34;             // Pinch detected when distance < this
+const PINCH_OFF_PX = 48;             // Pinch released when distance > this (hysteresis)
+const FIST_THRESH = 0.15;            // Fist detection threshold
 
-// Fist: smaller = harder to detect fist
-const FIST_THRESH = 0.15;
-
-// Hold frames (intent gating)
-// ~30 fps => 8 frames ~ 0.25s (feels intentional)
-const HOLD_PINCH_FRAMES = 8;
+// Intent Gating (hold frames before activation)
+const HOLD_PINCH_FRAMES = 8;         // ~0.27s at 30fps
 const HOLD_FIST_FRAMES  = 8;
 const HOLD_XFORM_FRAMES = 10;
 const HOLD_OPENPALM_FRAMES = 10;
+const THUMBS_HOLD_FRAMES = 18;       // Double thumbs-up reset gating
 
-// Cooldowns (stops accidental repeats)
+// Cooldowns (prevent accidental repeats)
 const SELECT_COOLDOWN_MS = 550;
 const OPENPALM_TOGGLE_COOLDOWN_MS = 1100;
-
-// Move tuning (PRO)
-const MOVE_SENS = 0.007;          // lower = less jumpy
-const MOVE_DEADZONE_PX = 7;       // ignore tiny jitters
-
-// Transform deadzones
-const SCALE_DEADZONE = 0.015;     // ignore <1.5% scale change per frame
-const ROT_DEADZONE_RAD = 0.02;    // ignore < ~1.1 degrees per frame
-const EXPLODE_DEADZONE_PX = 6;    // ignore tiny vertical movement
-
-// Floor pull
-const FLOOR_PULL_MAX = 2.2;
-const FLOOR_PULL_SMOOTH = 0.16;
-
-// State lock + orb placement
-const MODE_LOCK_MS = 520;
-const ORB_DEPTH = 4.0;
-
-// SNAP / DOCKING (1/10)
-const SNAP_POS = 0.25;
-const SNAP_ROT_DEG = 15;
-const SNAP_SCALE_STEP = 0.05;
-const SNAP_BLEND = 0.10;
-const SNAP_IDLE_DELAY_MS = 220;
-
-// BEAM (2/10) — straight, sharp
-const BEAM_POINTS = 18;
-const BEAM_BLEND = 0.26;
-const BEAM_BEADS = 8;
-const BEAM_BEAD_SPEED = 0.0009;
-
-// 4/10: Double thumbs-up reset (already gated)
-const THUMBS_HOLD_FRAMES = 18;   // slower than before
 const THUMBS_COOLDOWN_MS = 2000;
 
-// 5/10: HUD Label
-const HUD_LABEL_Y_OFFSET = 0.45;
+// Movement
+const MOVE_SENS = 0.007;             // XZ plane movement sensitivity
+const MOVE_DEADZONE_PX = 7;          // Ignore tiny hand jitter
 
-// COLORS (minimal Stark)
+// Transform Deadzones
+const SCALE_DEADZONE = 0.015;        // Ignore <1.5% scale change/frame
+const ROT_DEADZONE_RAD = 0.02;       // Ignore <1.1° rotation/frame
+const EXPLODE_DEADZONE_PX = 6;       // Ignore tiny vertical hand movement
+
+// Floor Pull
+const FLOOR_PULL_MAX = 2.2;          // Max horizontal pull distance
+const FLOOR_PULL_SMOOTH = 0.16;      // Pull smoothing
+
+// Mode & Orb
+const MODE_LOCK_MS = 520;            // Lock mode transitions briefly
+const ORB_DEPTH = 4.0;               // Orb distance from camera
+
+// Snap/Docking (auto-align when idle)
+const SNAP_POS = 0.25;               // Position snap grid
+const SNAP_ROT_DEG = 15;             // Rotation snap (degrees)
+const SNAP_SCALE_STEP = 0.05;        // Scale snap step
+const SNAP_BLEND = 0.10;             // Snap blending speed
+const SNAP_IDLE_DELAY_MS = 220;      // Delay before snapping
+
+// Beam (energy beam from orb to selected floor)
+const BEAM_POINTS = 18;              // Line segment count
+const BEAM_BLEND = 0.26;             // Beam smoothing
+const BEAM_BEADS = 8;                // Moving beads count
+const BEAM_BEAD_SPEED = 0.0009;      // Bead travel speed
+
+// HUD Label
+const HUD_LABEL_Y_OFFSET = 0.45;     // Floor label Y offset
+
+// Depth (Orbbec Gemini 336)
+const DEPTH_WS_URL = "ws://127.0.0.1:8765";
+const DEPTH_ENABLE = true;
+const DEPTH_SAMPLE_LANDMARK = 9;     // Palm center (0=wrist, more stable than fingertips)
+const Z_GAIN = 1.8;                  // Push/pull strength
+const Z_SMOOTH = 0.12;               // Z smoothing
+const Z_DEADZONE_M = 0.02;           // Ignore <2cm depth fluctuations
+const Z_CLAMP = 2.5;                 // Max Z offset (world units)
+const DEPTH_STALE_MS = 800;          // Consider depth stale after this
+
+// Colors (Stark minimal: cyan + amber only)
 const C_CYAN = 0x00ffff;
 const C_AMBER = 0xffd400;
 const C_BG = 0x05080d;
-// ==================================================
 
+// Orb Visual (reduced by ~35% from original 0.065 core / 0.095-0.135 ring)
+const ORB_CORE_RADIUS = 0.042;       // Core sphere
+const ORB_RING_INNER = 0.062;        // Ring inner
+const ORB_RING_OUTER = 0.088;        // Ring outer
+
+// ===================== UTILITIES =====================
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -93,7 +105,7 @@ function screenDeltaToWorld(dx, dy) {
   return { wx: dx * MOVE_SENS, wz: dy * MOVE_SENS };
 }
 
-// ----------------- Gesture detection ----------------
+// ===================== GESTURE DETECTION =====================
 function getPinchInfo(lm, W, H) {
   const t = lm[4], i = lm[8];
   const thumb = { x: mx(t.x) * W, y: t.y * H };
@@ -119,19 +131,14 @@ function isFist(lm) {
 }
 
 function getFistPoint(lm, W, H) {
-  const p = lm[9];
+  const p = lm[DEPTH_SAMPLE_LANDMARK];
   return { x: mx(p.x) * W, y: p.y * H };
 }
 function getPalmPoint(lm, W, H) {
-  const p = lm[9];
+  const p = lm[DEPTH_SAMPLE_LANDMARK];
   return { x: mx(p.x) * W, y: p.y * H };
 }
 
-/**
- * Thumbs-up detection:
- * - thumb tip above thumb IP & MCP
- * - other fingers not extended
- */
 function isThumbsUp(lm) {
   const thumbTip = lm[4], thumbIP = lm[3], thumbMCP = lm[2];
   const thumbUp = (thumbTip.y < thumbIP.y) && (thumbIP.y < thumbMCP.y);
@@ -143,7 +150,7 @@ function isThumbsUp(lm) {
   return thumbUp && downCount >= 3;
 }
 
-// ===================== Overlay scaling =====================
+// ===================== OVERLAY SCALING =====================
 let DPR = 1;
 function resizeOverlay() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -154,7 +161,7 @@ function resizeOverlay() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
-// ===================== Hand smoothing =====================
+// ===================== HAND SMOOTHING =====================
 let smoothedHands = [];
 function smoothLandmarks(results) {
   const hands = results.multiHandLandmarks || [];
@@ -179,7 +186,7 @@ function smoothLandmarks(results) {
   return smoothedHands;
 }
 
-// ===================== Overlay drawing =====================
+// ===================== OVERLAY DRAWING =====================
 function drawHand(pts, color = "rgba(255,255,255,0.14)") {
   const bones = [
     [0,1],[1,2],[2,3],[3,4],
@@ -213,6 +220,7 @@ function drawHand(pts, color = "rgba(255,255,255,0.14)") {
 function drawOverlay(results, fistPoints = [], pinchRings = []) {
   ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
+  // Crosshair
   ctx.globalAlpha = 0.10;
   ctx.strokeStyle = "white";
   ctx.lineWidth = 1;
@@ -227,6 +235,7 @@ function drawOverlay(results, fistPoints = [], pinchRings = []) {
   const smoothed = smoothLandmarks(results);
   for (const pts of smoothed) drawHand(pts);
 
+  // Pinch rings
   for (const pr of pinchRings) {
     const { pinchPoint, pinching, isLeft } = pr;
     ctx.beginPath();
@@ -234,8 +243,8 @@ function drawOverlay(results, fistPoints = [], pinchRings = []) {
     ctx.lineWidth = 3;
 
     const col =
-      (isLeft && pinching) ? "rgba(255,212,0,0.90)" :
-      (pinching ? "rgba(0,255,255,0.85)" : "rgba(255,255,255,0.16)");
+      (isLeft && pinching) ? "rgba(255,212,0,0.90)" :   // LEFT = AMBER
+      (pinching ? "rgba(0,255,255,0.85)" : "rgba(255,255,255,0.16)");  // RIGHT = CYAN
 
     ctx.strokeStyle = col;
     ctx.stroke();
@@ -246,6 +255,7 @@ function drawOverlay(results, fistPoints = [], pinchRings = []) {
     ctx.fill();
   }
 
+  // Fist indicator
   if (fistPoints.length === 1) {
     const p = fistPoints[0];
     const t = performance.now() * 0.01;
@@ -276,42 +286,39 @@ const target = {
   pos: new THREE.Vector3(0, 0, 0),
   rotY: 0,
   scale: 1,
-  explode: 0
+  explode: 0,
+  zOffset: 0,
 };
 const smooth = {
   pos: new THREE.Vector3(0, 0, 0),
   rotY: 0,
   scale: 1,
-  explode: 0
+  explode: 0,
+  zOffset: 0,
 };
 
 let grabbed = false;
-let wireframe = false;
+let wireframeMode = false;  // false = glass-holo, true = blueprint (edges-only)
 
 let hoveredFloor = null;
 let selectedFloor = null;
 
-// floor pull
 let pulling = false;
 let pullStartX = 0;
 let pullStartOffset = 0;
 
-// fist move (RIGHT hand only)
 let lastFist = null;
 let smoothFist = null;
 
-// two-hand pinch state
 let lastTwoDist = null;
 let lastTwoAngle = null;
 let lastTwoMidY = null;
 let smoothP1 = null;
 let smoothP2 = null;
 
-// laser
 let laserLine = null;
 let laserDot = null;
 
-// 3D orbs + lock
 const MODE = { IDLE: "IDLE", MOVE: "MOVE", PULL: "PULL", XFORM: "XFORM", SYS: "SYS" };
 let currentMode = MODE.IDLE;
 let lockUntil = 0;
@@ -323,11 +330,9 @@ let orbTarget = new THREE.Vector3();
 let orbAlpha = 0;
 let orbAlphaTarget = 0;
 
-// SNAP tracking
 let lastActiveTime = 0;
 let wasActive = false;
 
-// BEAM
 let beamOn = false;
 let beamLine = null;
 let beamGeo = null;
@@ -336,11 +341,9 @@ let beamBeads = [];
 let beamStartSmooth = new THREE.Vector3();
 let beamEndSmooth = new THREE.Vector3();
 
-// 4/10 thumbs-up state
 let thumbsStreak = 0;
 let lastThumbsResetTime = 0;
 
-// 5/10 HUD label
 let hudSprite = null;
 let hudCanvas = null;
 let hudCtx = null;
@@ -348,7 +351,6 @@ let hudTex = null;
 let hudText = "";
 let hudPulse = 0;
 
-// PRO: per-hand state (hysteresis + hold)
 const pinchState = {
   Left:  { active: false, hold: 0, point: null, dist: 999 },
   Right: { active: false, hold: 0, point: null, dist: 999 },
@@ -358,7 +360,18 @@ const xformState = { hold: 0 };
 const openPalmState = { hold: 0, lastToggleTime: 0 };
 let lastSelectTime = 0;
 
-// Convert screen to world at depth in front of camera
+// ===================== DEPTH STATE =====================
+let depthRightM = null;
+let depthLeftM = null;
+let depthLastMsgAt = 0;
+
+let zBaselineM = null;
+let zTarget = 0;
+let zSmooth = 0;
+
+let depthWS = null;
+
+// ===================== SCREEN TO WORLD =====================
 function screenToWorld(xPx, yPx, depth = ORB_DEPTH) {
   const ndc = new THREE.Vector3(
     (xPx / window.innerWidth) * 2 - 1,
@@ -370,19 +383,19 @@ function screenToWorld(xPx, yPx, depth = ORB_DEPTH) {
   return camera.position.clone().add(dir.multiplyScalar(depth));
 }
 
-// ======= Hand labels =======
+// ===================== HAND LABELS =====================
 function handsWithLabels(results) {
   const lms = results.multiHandLandmarks || [];
   const handed = results.multiHandedness || [];
   const out = [];
   for (let i = 0; i < lms.length; i++) {
-    const label = handed[i]?.label || "Unknown"; // "Left" or "Right"
+    const label = handed[i]?.label || "Unknown";
     out.push({ lm: lms[i], label });
   }
   return out;
 }
 
-// ===================== init =====================
+// ===================== INIT THREE =====================
 function initThree() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -424,7 +437,7 @@ function initThree() {
   createLaser();
   createOrbs();
   createBeam();
-  createHudLabel(); // 5/10
+  createHudLabel();
 
   window.addEventListener("resize", onResize);
   onResize();
@@ -460,6 +473,7 @@ function createBuildingFloors(n) {
     mesh.userData.pullTarget = 0;
     mesh.userData.floorIndex = i + 1;
 
+    // Edges (always visible)
     const edges = new THREE.EdgesGeometry(geo);
     const line = new THREE.LineSegments(
       edges,
@@ -520,14 +534,20 @@ function createLaser() {
   scene.add(laserDot);
 }
 
-// ======== Orbs ========
+// ===================== ORBS (reduced size by ~35%) =====================
 function makeOrb(colorHex) {
-  const g = new THREE.SphereGeometry(0.065, 22, 22);
+  const g = new THREE.SphereGeometry(ORB_CORE_RADIUS, 22, 22);
   const m = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.0 });
   const s = new THREE.Mesh(g, m);
 
-  const rg = new THREE.RingGeometry(0.095, 0.135, 48);
-  const rm = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false });
+  const rg = new THREE.RingGeometry(ORB_RING_INNER, ORB_RING_OUTER, 48);
+  const rm = new THREE.MeshBasicMaterial({ 
+    color: colorHex, 
+    transparent: true, 
+    opacity: 0.0, 
+    side: THREE.DoubleSide, 
+    depthWrite: false 
+  });
   const r = new THREE.Mesh(rg, rm);
   r.rotation.x = Math.PI / 2;
 
@@ -584,7 +604,7 @@ function updateOrbVisuals(time) {
   ring.scale.set(s, s, s);
 }
 
-// ======== ENERGY BEAM ========
+// ===================== ENERGY BEAM (straight line) =====================
 function createBeam() {
   beamGeo = new THREE.BufferGeometry();
   const pos = new Float32Array(BEAM_POINTS * 3);
@@ -634,6 +654,7 @@ function updateBeam(time) {
   beamStartSmooth.lerp(start, BEAM_BLEND);
   beamEndSmooth.lerp(end, BEAM_BLEND);
 
+  // Draw STRAIGHT line (linear interpolation)
   const arr = beamGeo.attributes.position.array;
   for (let i = 0; i < BEAM_POINTS; i++) {
     const t = i / (BEAM_POINTS - 1);
@@ -647,6 +668,7 @@ function updateBeam(time) {
   beamLine.visible = true;
   beamMat.opacity = 0.24 + 0.09 * Math.sin(time * 0.02);
 
+  // Beads traveling along beam
   for (let i = 0; i < beamBeads.length; i++) {
     const bead = beamBeads[i];
     bead.visible = true;
@@ -661,7 +683,7 @@ function updateBeam(time) {
   }
 }
 
-// ===================== 5/10 HUD LABEL =====================
+// ===================== HUD LABEL =====================
 function createHudLabel() {
   hudCanvas = document.createElement("canvas");
   hudCanvas.width = 512;
@@ -684,24 +706,24 @@ function createHudLabel() {
   hudSprite.visible = false;
   scene.add(hudSprite);
 
-  drawHudText(""); // init
+  drawHudText("");
 }
 
 function drawHudText(text) {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
 
-  // panel
+  // Panel
   hudCtx.globalAlpha = 0.18;
   hudCtx.fillStyle = "#00ffff";
   hudCtx.fillRect(70, 72, 372, 92);
 
-  // border
+  // Border
   hudCtx.globalAlpha = 0.40;
   hudCtx.strokeStyle = "#00ffff";
   hudCtx.lineWidth = 2;
   hudCtx.strokeRect(70, 72, 372, 92);
 
-  // small amber accent line (minimal)
+  // Amber accent line
   hudCtx.globalAlpha = 0.55;
   hudCtx.strokeStyle = "#ffd400";
   hudCtx.lineWidth = 2;
@@ -710,7 +732,7 @@ function drawHudText(text) {
   hudCtx.lineTo(420, 160);
   hudCtx.stroke();
 
-  // text
+  // Text
   hudCtx.globalAlpha = 0.92;
   hudCtx.fillStyle = "#00ffff";
   hudCtx.font = "700 44px system-ui, -apple-system, Segoe UI, Roboto, Arial";
@@ -718,7 +740,7 @@ function drawHudText(text) {
   hudCtx.textBaseline = "middle";
   hudCtx.fillText(text || "", hudCanvas.width / 2, 118);
 
-  // micro text
+  // Micro text
   hudCtx.globalAlpha = 0.55;
   hudCtx.font = "500 18px system-ui, -apple-system, Segoe UI, Roboto, Arial";
   hudCtx.fillText("LOCKED TARGET", hudCanvas.width / 2, 190);
@@ -742,7 +764,7 @@ function setHudFloor(floor) {
   hudSprite.visible = true;
 }
 
-// ===================== Hover + Laser =====================
+// ===================== HOVER & LASER =====================
 function updateHoverAndLaser(results) {
   const handsAll = results.multiHandLandmarks || [];
   if (handsAll.length === 0) {
@@ -798,7 +820,7 @@ function setFloorHighlight(floor, mode) {
   }
 }
 
-// ===================== PRO: gesture gating =====================
+// ===================== GESTURE GATING =====================
 function updatePinchWithHysteresis(label, pinchDistPx, pinchPoint) {
   const s = pinchState[label];
   if (!s) return;
@@ -806,11 +828,9 @@ function updatePinchWithHysteresis(label, pinchDistPx, pinchPoint) {
   s.dist = pinchDistPx;
   s.point = pinchPoint;
 
-  // hysteresis
   if (!s.active && pinchDistPx <= PINCH_ON_PX) s.active = true;
   else if (s.active && pinchDistPx >= PINCH_OFF_PX) s.active = false;
 
-  // hold gating
   if (s.active) s.hold = Math.min(s.hold + 1, 999);
   else s.hold = Math.max(0, s.hold - 2);
 }
@@ -838,12 +858,13 @@ function updateXformHold(twoPinchesConfirmed) {
   return xformState.hold >= HOLD_XFORM_FRAMES;
 }
 
-// ===================== Reset (3/10 + 4/10) =====================
+// ===================== RESET =====================
 function resetAll() {
   target.pos.set(0, 0, 0);
   target.rotY = 0;
   target.scale = 1;
   target.explode = 0;
+  target.zOffset = 0;
 
   for (const f of floors) f.userData.pullTarget = 0;
 
@@ -880,6 +901,9 @@ function resetAll() {
   fistState.hold = 0; fistState.active = false;
   xformState.hold = 0;
 
+  zBaselineM = null;
+  zTarget = 0;
+
   statusEl.textContent = "reset.";
 }
 
@@ -906,7 +930,7 @@ function updateThumbsReset(handsLabeled) {
   }
 }
 
-// ===================== MODE / ORB =====================
+// ===================== MODE & ORB =====================
 function applyModeLock(desired) {
   const now = performance.now();
   if (currentMode === MODE.IDLE && desired !== MODE.IDLE) {
@@ -947,7 +971,7 @@ function updateOrbTargetByMode({ mode, leftPinchPoint, rightFistPoint, xformMidP
   orbTarget.copy(w);
 }
 
-// ===================== Actions: select / pull =====================
+// ===================== ACTIONS =====================
 function maybeSelectFloorLeftConfirmed(leftPinchConfirmed) {
   const now = performance.now();
   if (!leftPinchConfirmed) return;
@@ -975,7 +999,7 @@ function maybeFloorPullLeft(leftPinchPoint, leftPinchConfirmed) {
     pulling = true;
     pullStartX = leftPinchPoint.x;
     pullStartOffset = selectedFloor.userData.pullTarget || 0;
-    statusEl.textContent = "mode: SELECT/PULL (LEFT pinch)";
+    statusEl.textContent = "mode: PULL (left pinch drag)";
     return;
   }
 
@@ -984,7 +1008,7 @@ function maybeFloorPullLeft(leftPinchPoint, leftPinchConfirmed) {
   selectedFloor.userData.pullTarget = clamp(pullStartOffset + worldDx, -FLOOR_PULL_MAX, FLOOR_PULL_MAX);
 }
 
-// ===================== Wireframe toggle (hold open palm) =====================
+// ===================== WIREFRAME TOGGLE (blueprint mode) =====================
 function maybeToggleWireframeHold(results, hasAnyActiveGesture) {
   const now = performance.now();
   if (hasAnyActiveGesture) {
@@ -1001,13 +1025,92 @@ function maybeToggleWireframeHold(results, hasAnyActiveGesture) {
   if (palm) openPalmState.hold++;
   else openPalmState.hold = Math.max(0, openPalmState.hold - 2);
 
-  if (openPalmState.hold >= HOLD_OPENPALM_FRAMES && (now - openPalmState.lastToggleTime) > OPENPALM_TOGGLE_COOLDOWN_MS) {
-    wireframe = !wireframe;
+  if (openPalmState.hold >= HOLD_OPENPALM_FRAMES && 
+      (now - openPalmState.lastToggleTime) > OPENPALM_TOGGLE_COOLDOWN_MS) {
+    wireframeMode = !wireframeMode;
     openPalmState.lastToggleTime = now;
     openPalmState.hold = 0;
 
-    for (const f of floors) f.material.wireframe = wireframe;
-    statusEl.textContent = wireframe ? "wireframe: ON (hold open palm)" : "wireframe: OFF (hold open palm)";
+    // Toggle between glass-holo and blueprint (edges-only)
+    for (const f of floors) {
+      if (wireframeMode) {
+        // BLUEPRINT MODE: hide faces, show only edges
+        f.material.opacity = 0.0;
+        f.material.emissiveIntensity = 0.0;
+      } else {
+        // GLASS-HOLO MODE: restore default translucent faces + edges
+        setFloorHighlight(f, 
+          f === selectedFloor ? "selected" : 
+          f === hoveredFloor ? "hover" : "off"
+        );
+      }
+    }
+
+    statusEl.textContent = wireframeMode ? 
+      "mode: BLUEPRINT (edges only)" : 
+      "mode: GLASS-HOLO (faces + edges)";
+  }
+}
+
+// ===================== DEPTH: push/pull Z =====================
+function depthUpdateForMove() {
+  const now = performance.now();
+  if (!depthRightM || (now - depthLastMsgAt) > DEPTH_STALE_MS) {
+    // Depth stale, slowly release baseline
+    if (zBaselineM !== null) zBaselineM = null;
+    return;
+  }
+
+  if (!fistState.active) {
+    if (zBaselineM !== null) zBaselineM = null;
+    return;
+  }
+
+  if (zBaselineM == null) {
+    zBaselineM = depthRightM;
+    return;
+  }
+
+  const dz = (depthRightM - zBaselineM);
+  if (Math.abs(dz) < Z_DEADZONE_M) return;
+
+  // Push/pull: moving hand closer = model comes closer (negative Z)
+  const desired = clamp((-dz) * Z_GAIN, -Z_CLAMP, Z_CLAMP);
+  zTarget = desired;
+}
+
+// ===================== DEPTH: send hand positions to server =====================
+function sendHandPositionsToDepth(results) {
+  if (!depthWS || depthWS.readyState !== WebSocket.OPEN) return;
+
+  const hands = handsWithLabels(results);
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  let leftPt = null;
+  let rightPt = null;
+
+  for (const h of hands) {
+    const p = h.lm[DEPTH_SAMPLE_LANDMARK];
+    const pt = {
+      x: Math.round(mx(p.x) * W),
+      y: Math.round(p.y * H)
+    };
+
+    if (h.label === "Left") leftPt = pt;
+    if (h.label === "Right") rightPt = pt;
+  }
+
+  const msg = {
+    t: performance.now(),
+    left: leftPt,
+    right: rightPt
+  };
+
+  try {
+    depthWS.send(JSON.stringify(msg));
+  } catch (e) {
+    // Ignore send errors (connection may be closing)
   }
 }
 
@@ -1016,35 +1119,30 @@ function drive3D(results) {
   const W = window.innerWidth, H = window.innerHeight;
   const hands = handsWithLabels(results);
 
-  // 4/10: thumbs-up reset (gated)
-  updateThumbsReset(hands);
+  // Send hand positions to depth server
+  if (DEPTH_ENABLE) sendHandPositionsToDepth(results);
 
-  // Update hover/laser using first hand index finger
+  updateThumbsReset(hands);
   updateHoverAndLaser(results);
 
-  // Collect pinch + fist with PRO gating
   let rightFistNow = false;
   let rightFistPoint = null;
 
-  // for overlay rings
   const pinchRings = [];
   const fistPoints = [];
 
-  // reset points each frame
   pinchState.Left.point = null;
   pinchState.Right.point = null;
 
-  // update per-hand pinch (hysteresis + hold)
+  // Update per-hand pinch
   for (const h of hands) {
     const { lm, label } = h;
     const { pinchPoint, pinchDistPx } = getPinchInfo(lm, W, H);
 
-    // track pinch state only for Left/Right
     if (label === "Left" || label === "Right") {
       updatePinchWithHysteresis(label, pinchDistPx, pinchPoint);
       pinchRings.push({ pinchPoint, pinching: pinchState[label].active, isLeft: (label === "Left") });
     } else {
-      // unknown label still draw as cyan pinch ring
       pinchRings.push({ pinchPoint, pinching: (pinchDistPx <= PINCH_ON_PX), isLeft: false });
     }
 
@@ -1064,26 +1162,25 @@ function drive3D(results) {
   const leftPinchPoint = pinchState.Left.point;
   const rightPinchPoint = pinchState.Right.point;
 
-  // Two-hand transform requires BOTH confirmed
   const twoPinchesConfirmed = leftPinchOK && rightPinchOK && leftPinchPoint && rightPinchPoint;
   const xformOK = updateXformHold(twoPinchesConfirmed);
 
-  // open-palm wireframe toggle (hold + cooldown)
   const anyActiveGesture = leftPinchOK || rightPinchOK || fistState.active || xformOK || pulling;
   maybeToggleWireframeHold(results, anyActiveGesture);
 
-  // LEFT pinch selects + pulls
   maybeSelectFloorLeftConfirmed(leftPinchOK);
   maybeFloorPullLeft(leftPinchPoint, leftPinchOK);
 
-  // Decide desired mode (hand-specific + gated)
+  // Depth: update Z offset when moving
+  if (DEPTH_ENABLE) depthUpdateForMove();
+
+  // Decide desired mode
   let desired = MODE.IDLE;
 
   if (xformOK) desired = MODE.XFORM;
   else if (pulling || leftPinchOK) desired = MODE.PULL;
   else if (fistState.active && !leftPinchOK && !rightPinchOK) desired = MODE.MOVE;
   else {
-    // SYS mode if first hand open palm (no gestures)
     const anyLM = results.multiHandLandmarks || [];
     if (anyLM.length && !anyActiveGesture && isOpenPalm(anyLM[0])) desired = MODE.SYS;
   }
@@ -1103,30 +1200,26 @@ function drive3D(results) {
     results
   });
 
-  // Beam only for left pinch confirmed + selected floor
   beamOn = !!(selectedFloor && leftPinchOK && orbPull.visible);
 
-  // ===== ACTIONS =====
-
-  // PULL mode: already handled by maybeFloorPullLeft()
+  // PULL mode
   if (pulling) {
     grabbed = true;
     lastActiveTime = performance.now();
     wasActive = true;
     lastFist = null;
 
-    statusEl.textContent = "PULL: left pinch drag (hold) • move: right fist (hold) • 👍👍 reset";
+    statusEl.textContent = "PULL: left pinch drag • MOVE: right fist + depth Z";
     drawOverlay(results, fistPoints, pinchRings);
     return;
   }
 
-  // TRANSFORM mode (2-hand pinch confirmed + held)
+  // TRANSFORM mode
   if (xformOK && twoPinchesConfirmed) {
     grabbed = true;
     lastActiveTime = performance.now();
     wasActive = true;
 
-    // smooth pinch points
     smoothP1 = emaVec2(smoothP1, leftPinchPoint, 0.30);
     smoothP2 = emaVec2(smoothP2, rightPinchPoint, 0.30);
 
@@ -1158,12 +1251,12 @@ function drive3D(results) {
     lastTwoAngle = a;
     lastTwoMidY = midY;
 
-    statusEl.textContent = "XFORM: 2-hand pinch (hold) • 👍👍 reset";
+    statusEl.textContent = "XFORM: 2-hand pinch (rotate+scale+explode)";
     drawOverlay(results, fistPoints, pinchRings);
     return;
   }
 
-  // MOVE mode (right fist confirmed + held)
+  // MOVE mode
   if (fistState.active && !leftPinchOK && !rightPinchOK) {
     grabbed = true;
     lastActiveTime = performance.now();
@@ -1176,7 +1269,6 @@ function drive3D(results) {
       const dx = smoothFist.x - lastFist.x;
       const dy = smoothFist.y - lastFist.y;
 
-      // deadzone
       const adx = Math.abs(dx), ady = Math.abs(dy);
       if (adx > MOVE_DEADZONE_PX || ady > MOVE_DEADZONE_PX) {
         const { wx, wz } = screenDeltaToWorld(dx, dy);
@@ -1187,14 +1279,14 @@ function drive3D(results) {
 
     lastFist = { ...smoothFist };
 
-    // reset transform state when not in xform
     lastTwoDist = null;
     lastTwoAngle = null;
     lastTwoMidY = null;
     smoothP1 = null;
     smoothP2 = null;
 
-    statusEl.textContent = "MOVE: right fist (hold) • 👍👍 reset";
+    const depthStr = depthRightM ? ` depth=${depthRightM.toFixed(2)}m` : "";
+    statusEl.textContent = `MOVE: right fist (XZ + depth Z)${depthStr}`;
     drawOverlay(results, fistPoints, pinchRings);
     return;
   }
@@ -1208,13 +1300,13 @@ function drive3D(results) {
   wasActive = false;
 
   statusEl.textContent = selectedFloor
-    ? "idle. right fist=move (hold) • 2-hand pinch=xform (hold) • left pinch=pull (hold) • 👍👍 reset"
-    : "idle. right fist=move (hold) • 2-hand pinch=xform (hold) • left pinch=select (hold) • 👍👍 reset";
+    ? "idle • right fist=move+push/pull • left pinch=pull • 2-hand=xform"
+    : "idle • left pinch=select • right fist=move • 2-hand=xform";
 
   drawOverlay(results, fistPoints, pinchRings);
 }
 
-// ===================== render loop =====================
+// ===================== RENDER LOOP =====================
 function tick() {
   const a = 0.12;
   smooth.pos.lerp(target.pos, a);
@@ -1222,7 +1314,12 @@ function tick() {
   smooth.scale = lerp(smooth.scale, target.scale, a);
   smooth.explode = lerp(smooth.explode, target.explode, a);
 
-  // ---- SNAP DOCKING ----
+  // Depth Z smooth
+  zSmooth = lerp(zSmooth, zTarget, Z_SMOOTH);
+  target.zOffset = zSmooth;
+  smooth.zOffset = lerp(smooth.zOffset, target.zOffset, 0.12);
+
+  // Snap docking
   const now = performance.now();
   const idleLongEnough = (now - lastActiveTime) > SNAP_IDLE_DELAY_MS;
 
@@ -1239,11 +1336,11 @@ function tick() {
   }
 
   buildingGroup.position.x = smooth.pos.x;
-  buildingGroup.position.z = smooth.pos.z;
+  buildingGroup.position.z = smooth.pos.z + smooth.zOffset;  // Depth applied here
   buildingGroup.rotation.y = smooth.rotY;
   buildingGroup.scale.setScalar(smooth.scale);
 
-  // explode floors + pull offsets
+  // Explode floors + pull offsets
   const baseGap = 0.20;
   const extra = smooth.explode * 0.35;
 
@@ -1256,7 +1353,7 @@ function tick() {
     f.position.x = f.userData.pull;
   }
 
-  // hologram pulse (subtle)
+  // Hologram pulse
   const pulse = grabbed ? (0.68 + 0.28 * Math.sin(performance.now() * 0.012)) : 0.52;
   for (const f of floors) {
     const line = f.children[0];
@@ -1266,23 +1363,23 @@ function tick() {
     }
   }
 
-  // laser pulse
+  // Laser pulse
   if (laserLine.visible) {
     laserLine.material.opacity = 0.34 + 0.16 * Math.sin(performance.now() * 0.02);
     laserDot.material.opacity = 0.60 + 0.22 * Math.sin(performance.now() * 0.02);
   }
 
-  // particles
+  // Particles
   if (particlePoints) {
     particlePoints.rotation.y += 0.0014;
     particlePoints.material.opacity = grabbed ? 0.22 : 0.16;
   }
 
-  // orb + beam
+  // Orb + beam
   updateOrbVisuals(performance.now());
   updateBeam(performance.now());
 
-  // 5/10 HUD label update
+  // HUD label
   if (hudSprite) {
     if (selectedFloor) {
       const pos = new THREE.Vector3();
@@ -1306,7 +1403,7 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-// ===================== Resize =====================
+// ===================== RESIZE =====================
 function onResize() {
   resizeOverlay();
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -1314,7 +1411,7 @@ function onResize() {
   camera.updateProjectionMatrix();
 }
 
-// ===================== MediaPipe =====================
+// ===================== MEDIAPIPE =====================
 async function initHands() {
   if (typeof Hands === "undefined" || typeof Camera === "undefined") {
     statusEl.textContent = "MediaPipe not loaded (Hands/Camera missing).";
@@ -1349,8 +1446,56 @@ async function initHands() {
   statusEl.textContent = "online.";
 }
 
-// ===================== Boot =====================
+// ===================== DEPTH WS CLIENT =====================
+function initDepthWS() {
+  if (!DEPTH_ENABLE) {
+    depthStatusEl.textContent = "depth: disabled";
+    return;
+  }
+
+  let retry = 0;
+
+  const connect = () => {
+    depthStatusEl.textContent = "depth: connecting...";
+    depthWS = new WebSocket(DEPTH_WS_URL);
+
+    depthWS.onopen = () => {
+      retry = 0;
+      depthStatusEl.textContent = "depth: connected";
+    };
+
+    depthWS.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        depthLastMsgAt = performance.now();
+        depthLeftM = typeof msg.left_m === "number" ? msg.left_m : null;
+        depthRightM = typeof msg.right_m === "number" ? msg.right_m : null;
+
+        const r = depthRightM ? depthRightM.toFixed(2) : "--";
+        const l = depthLeftM ? depthLeftM.toFixed(2) : "--";
+        depthStatusEl.textContent = `depth: L=${l}m R=${r}m`;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    };
+
+    depthWS.onclose = () => {
+      depthStatusEl.textContent = "depth: disconnected (retrying...)";
+      retry++;
+      const delay = Math.min(1500 + retry * 500, 6000);
+      setTimeout(connect, delay);
+    };
+
+    depthWS.onerror = () => {
+      // Will trigger onclose
+    };
+  };
+
+  connect();
+}
+
+// ===================== BOOT =====================
 resizeOverlay();
 initThree();
 initHands();
-
+initDepthWS();
