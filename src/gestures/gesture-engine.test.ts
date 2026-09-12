@@ -32,4 +32,43 @@ describe('GestureEngine', () => {
     ];
     expect(engine.process(hands, 0).primary?.hand.handedness).toBe('Left');
   });
+
+  it('preserves a pending pinch across a handedness-label flip', () => {
+    const engine = new GestureEngine();
+    const first = engine.process([syntheticHand('Right', 0.5, 0.5, 0.25, true)], 0);
+    const confirmed = engine.process([syntheticHand('Left', 0.5, 0.5, 0.25, true)], 160);
+    expect(confirmed.state).toBe('GRAB_ACTIVE');
+    expect(confirmed.primary?.key).toBe(first.primary?.key);
+  });
+
+  it('prefers an active pinch over an idle dominant hand', () => {
+    const engine = new GestureEngine();
+    engine.setDominantHand('left');
+    const result = engine.process(
+      [syntheticHand('Left', 0.3, 0.5, 0.25, false), syntheticHand('Right', 0.7, 0.5, 0.25, true)],
+      0,
+    );
+    expect(result.primary?.hand.handedness).toBe('Right');
+    expect(result.state).toBe('PINCH_CANDIDATE');
+  });
+
+  it('enforces a cooldown after a confirmed release', () => {
+    const engine = new GestureEngine();
+    const pinched = syntheticHand('Right', 0.5, 0.5, 0.25, true);
+    const open = syntheticHand('Right', 0.5, 0.5, 0.25, false);
+    engine.process([pinched], 0);
+    engine.process([pinched], 160);
+    engine.process([open], 200);
+    engine.process([open], 300);
+    expect(engine.process([pinched], 310).state).toBe('HOVER');
+    expect(engine.process([pinched], 500).state).toBe('PINCH_CANDIDATE');
+  });
+
+  it('resets temporal state when timestamps move backwards', () => {
+    const engine = new GestureEngine();
+    const pinched = syntheticHand('Right', 0.5, 0.5, 0.25, true);
+    engine.process([pinched], 1000);
+    expect(engine.process([pinched], 900).state).toBe('PINCH_CANDIDATE');
+    expect(engine.process([pinched], 910).holdMs).toBe(10);
+  });
 });

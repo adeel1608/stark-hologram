@@ -4,8 +4,19 @@ This project follows semantic versioning once release tags are created. Entries 
 
 ## [Unreleased]
 
-- Hardware validation across iPhone/iPad virtual cameras and generic webcams
-- Recorded landmark replay and live telemetry adapters
+### Fixed
+
+- Guard overlapping camera/tracker starts so late streams cannot replace newer selections.
+- Release camera resources on partial startup failures and ignore stale track-ended events.
+- Validate optional browser-storage data and tolerate storage-policy failures.
+- Keep gesture identity stable through isolated handedness-label flips and enforce release cooldown.
+- Require a still multi-feature calibration window before enabling relative depth.
+- Preserve a saved depth baseline across ordinary scene and gesture resets.
+
+### Remaining
+
+- Hardware validation across iPhone/iPad virtual cameras and generic webcams.
+- Recorded landmark replay and live telemetry adapters.
 
 ## [0.2.0] — Architecture modernization
 

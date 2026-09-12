@@ -17,6 +17,10 @@ Camera labels may be hidden until permission has been granted. Labels come from 
 
 Saved data includes device ID, capture preferences, mirror preference, and calibration—not video frames.
 
+Camera starts are generation-guarded: if source changes overlap, only the newest request may become active and every late stream is stopped. A failed `video.play()`, empty video stream, or tracker startup also releases capture resources. Preferred size and frame-rate values use standard ideal constraints; an overconstrained result is retried without those preferences while preserving an explicitly selected device.
+
+Saved settings are type/range validated. Storage denial, quota errors, or malformed local data fall back to defaults and never prevent capture. Generic browser or virtual-camera labels are displayed without guessing the underlying hardware.
+
 ## MediaPipe assets
 
 JavaScript is installed through `@mediapipe/tasks-vision`. The WASM runtime is loaded from a pinned jsDelivr package path and the official Hand Landmarker model from Google-hosted MediaPipe models. This avoids legacy global scripts while keeping the large runtime/model out of the repository.

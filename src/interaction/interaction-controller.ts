@@ -3,6 +3,7 @@ import type { DepthReading } from '../depth/types';
 import { RelativeDepthProvider } from '../depth/relative-depth-provider';
 import { GestureEngine, type GestureSnapshot } from '../gestures/gesture-engine';
 import { distance2, shortestAngleDelta } from '../gestures/math';
+import { isOpenPalm } from '../gestures/recognizers';
 import type { TwinScene } from '../rendering/twin-scene';
 import type { TrackingFrame } from '../vision/types';
 
@@ -10,7 +11,8 @@ export interface InteractionUpdate {
   frame: TrackingFrame;
   gesture: GestureSnapshot;
   depth: DepthReading;
-  event?: 'grab' | 'release' | 'select' | 'reset';
+  event?: 'grab' | 'release' | 'select' | 'translate' | 'transform' | 'tracking-lost' | 'reset';
+  activationLatencyMs?: number;
 }
 
 type InteractionListener = (update: InteractionUpdate) => void;
@@ -41,11 +43,16 @@ export class InteractionController {
     const gesture = this.gestures.process(frame.hands, frame.timestamp);
     const depth = this.depth.update(gesture.primary?.hand, frame.timestamp);
     let event: InteractionUpdate['event'];
+    let activationLatencyMs: number | undefined;
 
     if (gesture.state === 'GRAB_ACTIVE' && gesture.primary) {
       const point = { x: 1 - gesture.primary.pinch.point.x, y: gesture.primary.pinch.point.y };
       if (this.#previousState !== 'GRAB_ACTIVE') {
         event = this.scene.selectNormalized(point.x, point.y) ? 'select' : 'grab';
+        activationLatencyMs =
+          gesture.primary.candidateSince === undefined
+            ? undefined
+            : frame.timestamp - gesture.primary.candidateSince;
         this.#lastPrimary = point;
         this.#lastDepth = depth.filtered;
       } else if (this.#lastPrimary) {
@@ -54,6 +61,7 @@ export class InteractionController {
         const dz =
           depth.available && this.#lastDepth !== undefined ? depth.filtered - this.#lastDepth : 0;
         this.scene.translate(dx * 8, -dy * 6, dz * 2.2);
+        if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) > 0.0001) event = 'translate';
         this.#lastPrimary = point;
         this.#lastDepth = depth.filtered;
       }
@@ -66,12 +74,15 @@ export class InteractionController {
       const currentMidY = (a.y + b.y) / 2;
       if (this.#lastTwoDistance && this.#lastTwoDistance > 0) {
         this.scene.scale(currentDistance / this.#lastTwoDistance);
+        event = 'transform';
       }
       if (this.#lastTwoAngle !== undefined) {
         this.scene.rotate(shortestAngleDelta(this.#lastTwoAngle, currentAngle));
+        event = 'transform';
       }
       if (this.#lastTwoMidY !== undefined) {
         this.scene.setExploded(this.scene.exploded + (this.#lastTwoMidY - currentMidY) * 2.2);
+        event = 'transform';
       }
       this.#lastTwoDistance = currentDistance;
       this.#lastTwoAngle = currentAngle;
@@ -79,28 +90,19 @@ export class InteractionController {
       this.#lastPrimary = undefined;
       this.#lastDepth = undefined;
     } else {
-      if (this.#previousState === 'GRAB_ACTIVE' || this.#previousState === 'TWO_HAND_ACTIVE')
-        event = 'release';
+      if (this.#previousState === 'GRAB_ACTIVE' || this.#previousState === 'TWO_HAND_ACTIVE') {
+        event = frame.hands.length === 0 ? 'tracking-lost' : 'release';
+      }
       this.#lastPrimary = undefined;
       this.#lastDepth = undefined;
       this.clearTwoHandHistory();
     }
 
-    const openPalms = gesture.hands.filter((intent) => {
-      const tips = [8, 12, 16, 20];
-      const wrist = intent.hand.landmarks[0];
-      if (!wrist) return false;
-      return tips.every((tipIndex) => {
-        const tip = intent.hand.landmarks[tipIndex];
-        const joint = intent.hand.landmarks[tipIndex - 2];
-        return tip && joint && distance2(wrist, tip) > distance2(wrist, joint) * 1.16;
-      });
-    }).length;
+    const openPalms = gesture.hands.filter((intent) => isOpenPalm(intent.hand)).length;
     if (openPalms >= 2) {
       this.#twoPalmSince ??= frame.timestamp;
       if (frame.timestamp - this.#twoPalmSince > 850) {
         this.scene.reset();
-        this.depth.rebaseline();
         this.#twoPalmSince = frame.timestamp + 2000;
         event = 'reset';
       }
@@ -109,17 +111,18 @@ export class InteractionController {
     }
 
     this.#previousState = gesture.state;
-    const update = { frame, gesture, depth, event };
+    const update = { frame, gesture, depth, event, activationLatencyMs };
     this.#listener?.(update);
     return update;
   }
 
-  reset(): void {
+  reset(options: { rebaseline?: boolean } = {}): void {
     this.gestures.reset();
-    this.depth.rebaseline();
+    if (options.rebaseline) this.depth.rebaseline();
     this.#previousState = 'IDLE';
     this.#lastPrimary = undefined;
     this.#lastDepth = undefined;
+    this.#twoPalmSince = undefined;
     this.clearTwoHandHistory();
   }
 

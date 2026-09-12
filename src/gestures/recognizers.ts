@@ -9,18 +9,29 @@ export interface PinchRecognition {
   point: { x: number; y: number };
 }
 
+const PALM_FEATURE_PAIRS: ReadonlyArray<readonly [number, number]> = [
+  [0, 5],
+  [0, 9],
+  [0, 13],
+  [0, 17],
+  [5, 17],
+];
+
+export function palmScaleFeatures(landmarks: Landmark[]): number[] {
+  const features: number[] = [];
+  for (const [from, to] of PALM_FEATURE_PAIRS) {
+    const a = landmarks[from];
+    const b = landmarks[to];
+    if (!a || !b) return [];
+    const value = distance2(a, b);
+    if (!Number.isFinite(value) || value <= 0) return [];
+    features.push(value);
+  }
+  return features;
+}
+
 export function palmScale(landmarks: Landmark[]): number {
-  const wrist = landmarks[0];
-  const indexMcp = landmarks[5];
-  const middleMcp = landmarks[9];
-  const pinkyMcp = landmarks[17];
-  if (!wrist || !indexMcp || !middleMcp || !pinkyMcp) return 0;
-  return median([
-    distance2(wrist, middleMcp),
-    distance2(indexMcp, pinkyMcp),
-    distance2(wrist, indexMcp),
-    distance2(wrist, pinkyMcp),
-  ]);
+  return median(palmScaleFeatures(landmarks));
 }
 
 export function recognizePinch(hand: TrackedHand, wasActive = false): PinchRecognition {

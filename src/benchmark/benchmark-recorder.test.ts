@@ -24,6 +24,9 @@ const update: InteractionUpdate = {
     baseline: 0,
     palmScale: 0,
     stability: 0,
+    calibrationProgress: 0,
+    calibrationVariation: 0,
+    featureSpread: 0,
   },
 };
 

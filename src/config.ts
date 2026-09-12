@@ -42,6 +42,8 @@ export const APP_CONFIG = {
     bounds: 1,
     relativeGain: 2.1,
     staleAfterMs: 350,
+    calibrationSamples: 15,
+    calibrationVariationLimit: 0.035,
   },
   colors: {
     cyan: 0x37e6f4,

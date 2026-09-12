@@ -1,4 +1,10 @@
 import { APP_CONFIG } from '../config';
+import {
+  browserStorage,
+  readStoredJson,
+  type SafeStorage,
+  writeStoredJson,
+} from '../storage/safe-storage';
 import type { CameraOption, CameraProvider, CameraSettings, CameraState } from './types';
 
 const STORAGE_KEY = 'spatial-hmi.camera.v1';
@@ -10,7 +16,40 @@ const DEFAULT_SETTINGS: CameraSettings = {
   mirror: true,
 };
 
-function cameraError(error: unknown): CameraState {
+export interface CameraMediaDevices {
+  getUserMedia?: (constraints?: MediaStreamConstraints) => Promise<MediaStream>;
+  enumerateDevices?: () => Promise<MediaDeviceInfo[]>;
+  addEventListener?: MediaDevices['addEventListener'];
+  removeEventListener?: MediaDevices['removeEventListener'];
+}
+
+export interface CameraManagerDependencies {
+  mediaDevices?: CameraMediaDevices;
+  storage?: SafeStorage;
+}
+
+function finiteWithin(value: unknown, minimum: number, maximum: number, fallback: number): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) && numeric >= minimum && numeric <= maximum ? numeric : fallback;
+}
+
+export function normalizeCameraSettings(value: unknown): CameraSettings {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_SETTINGS };
+  const candidate = value as Record<string, unknown>;
+  const deviceId =
+    typeof candidate.deviceId === 'string' && candidate.deviceId.length <= 1024
+      ? candidate.deviceId || undefined
+      : undefined;
+  return {
+    deviceId,
+    width: finiteWithin(candidate.width, 160, 7680, DEFAULT_SETTINGS.width),
+    height: finiteWithin(candidate.height, 120, 4320, DEFAULT_SETTINGS.height),
+    frameRate: finiteWithin(candidate.frameRate, 1, 120, DEFAULT_SETTINGS.frameRate),
+    mirror: typeof candidate.mirror === 'boolean' ? candidate.mirror : DEFAULT_SETTINGS.mirror,
+  };
+}
+
+export function cameraError(error: unknown): CameraState {
   const name = error instanceof DOMException ? error.name : 'CameraError';
   const messages: Record<string, string> = {
     NotAllowedError:
@@ -34,37 +73,37 @@ export class CameraManager extends EventTarget implements CameraProvider {
   #stream?: MediaStream;
   #state: CameraState = { status: 'idle' };
   #settings: CameraSettings;
+  #operation = 0;
+  #disposed = false;
+  readonly #mediaDevices?: CameraMediaDevices;
+  readonly #storage?: SafeStorage;
 
-  constructor(private readonly video: HTMLVideoElement) {
+  constructor(
+    private readonly video: HTMLVideoElement,
+    dependencies?: CameraManagerDependencies,
+  ) {
     super();
-    this.#settings = CameraManager.loadSettings();
-    navigator.mediaDevices?.addEventListener('devicechange', this.handleDeviceChange);
+    this.#mediaDevices =
+      dependencies && 'mediaDevices' in dependencies
+        ? dependencies.mediaDevices
+        : globalThis.navigator?.mediaDevices;
+    this.#storage =
+      dependencies && 'storage' in dependencies ? dependencies.storage : browserStorage();
+    this.#settings = CameraManager.loadSettings(this.#storage);
+    this.#mediaDevices?.addEventListener?.('devicechange', this.handleDeviceChange);
   }
 
   get settings(): CameraSettings {
     return { ...this.#settings };
   }
 
-  static loadSettings(): CameraSettings {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return { ...DEFAULT_SETTINGS };
-      const parsed = JSON.parse(stored) as Partial<CameraSettings>;
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        width: Number(parsed.width) || DEFAULT_SETTINGS.width,
-        height: Number(parsed.height) || DEFAULT_SETTINGS.height,
-        frameRate: Number(parsed.frameRate) || DEFAULT_SETTINGS.frameRate,
-      };
-    } catch {
-      return { ...DEFAULT_SETTINGS };
-    }
+  static loadSettings(storage: SafeStorage | undefined = browserStorage()): CameraSettings {
+    return normalizeCameraSettings(readStoredJson(storage, STORAGE_KEY));
   }
 
   async enumerate(): Promise<CameraOption[]> {
-    if (!navigator.mediaDevices?.enumerateDevices) return [];
-    const devices = await navigator.mediaDevices.enumerateDevices();
+    if (!this.#mediaDevices?.enumerateDevices) return [];
+    const devices = await this.#mediaDevices.enumerateDevices();
     let cameraNumber = 0;
     return devices
       .filter((device) => device.kind === 'videoinput')
@@ -75,7 +114,8 @@ export class CameraManager extends EventTarget implements CameraProvider {
   }
 
   async start(settings: CameraSettings = this.#settings): Promise<MediaStream> {
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (this.#disposed) throw new Error('Camera manager has been disposed');
+    if (!this.#mediaDevices?.getUserMedia) {
       const state: CameraState = {
         status: 'error',
         code: 'UnsupportedError',
@@ -86,45 +126,52 @@ export class CameraManager extends EventTarget implements CameraProvider {
       throw new Error(state.message);
     }
 
-    this.stop();
+    const operation = ++this.#operation;
+    this.releaseActiveStream();
     this.setState({ status: 'requesting' });
+    const normalized = normalizeCameraSettings(settings);
+    let stream: MediaStream | undefined;
     try {
-      const constraints: MediaStreamConstraints = {
-        audio: false,
-        video: {
-          deviceId: settings.deviceId ? { exact: settings.deviceId } : undefined,
-          width: { ideal: settings.width },
-          height: { ideal: settings.height },
-          frameRate: { ideal: settings.frameRate, max: 60 },
-        },
-      };
-      this.#stream = await navigator.mediaDevices.getUserMedia(constraints);
-      this.video.srcObject = this.#stream;
-      await this.video.play();
-      const track = this.#stream.getVideoTracks()[0];
+      stream = await this.requestStream(normalized);
+      this.assertCurrent(operation, stream);
+      const track = stream.getVideoTracks()[0];
       if (!track) throw new Error('Camera stream contains no video track');
-      track.addEventListener('ended', this.handleTrackEnded, { once: true });
+      this.video.srcObject = stream;
+      await this.video.play();
+      this.assertCurrent(operation, stream);
+      this.#stream = stream;
+      const activeStream = stream;
+      track.addEventListener('ended', () => this.handleTrackEnded(activeStream), { once: true });
       const actual = track.getSettings();
       this.#settings = {
-        ...settings,
-        deviceId: actual.deviceId || settings.deviceId,
-        width: actual.width ?? settings.width,
-        height: actual.height ?? settings.height,
-        frameRate: actual.frameRate ?? settings.frameRate,
+        ...normalized,
+        deviceId: actual.deviceId || normalized.deviceId,
+        width: actual.width ?? normalized.width,
+        height: actual.height ?? normalized.height,
+        frameRate: actual.frameRate ?? normalized.frameRate,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#settings));
+      writeStoredJson(this.#storage, STORAGE_KEY, this.#settings);
       this.video.classList.toggle('mirrored', this.#settings.mirror);
-      const options = await this.enumerate();
+      let options: CameraOption[] = [];
+      try {
+        options = await this.enumerate();
+      } catch {
+        // Enumeration is optional after capture starts; track settings and label remain authoritative.
+      }
+      this.assertCurrent(operation, stream);
       const option = options.find((candidate) => candidate.deviceId === actual.deviceId);
       this.setState({
         status: 'active',
         label: option?.label ?? track.label ?? 'Browser camera',
-        width: actual.width ?? settings.width,
-        height: actual.height ?? settings.height,
+        width: actual.width ?? normalized.width,
+        height: actual.height ?? normalized.height,
         frameRate: actual.frameRate,
       });
-      return this.#stream;
+      return stream;
     } catch (error) {
+      this.releaseStream(stream);
+      if (this.video.srcObject === stream) this.video.srcObject = null;
+      if (operation !== this.#operation) throw error;
       const state = cameraError(error);
       this.setState(state);
       throw error;
@@ -132,12 +179,9 @@ export class CameraManager extends EventTarget implements CameraProvider {
   }
 
   stop(): void {
-    if (this.#stream) {
-      for (const track of this.#stream.getTracks()) track.stop();
-      this.#stream = undefined;
-    }
-    this.video.srcObject = null;
-    if (this.#state.status !== 'error') this.setState({ status: 'idle' });
+    this.#operation += 1;
+    this.releaseActiveStream();
+    this.setState({ status: 'idle' });
   }
 
   getState(): CameraState {
@@ -147,12 +191,14 @@ export class CameraManager extends EventTarget implements CameraProvider {
   setMirror(mirror: boolean): void {
     this.#settings.mirror = mirror;
     this.video.classList.toggle('mirrored', mirror);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#settings));
+    writeStoredJson(this.#storage, STORAGE_KEY, this.#settings);
   }
 
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     this.stop();
-    navigator.mediaDevices?.removeEventListener('devicechange', this.handleDeviceChange);
+    this.#mediaDevices?.removeEventListener?.('devicechange', this.handleDeviceChange);
   }
 
   private setState(state: CameraState): void {
@@ -160,7 +206,8 @@ export class CameraManager extends EventTarget implements CameraProvider {
     this.dispatchEvent(new CustomEvent<CameraState>('statechange', { detail: state }));
   }
 
-  private handleTrackEnded = (): void => {
+  private handleTrackEnded(stream: MediaStream): void {
+    if (this.#stream !== stream) return;
     this.#stream = undefined;
     this.video.srcObject = null;
     this.setState({
@@ -168,9 +215,50 @@ export class CameraManager extends EventTarget implements CameraProvider {
       code: 'DisconnectedError',
       message: 'The active camera disconnected. Choose another source or continue in demo mode.',
     });
-  };
+  }
 
   private handleDeviceChange = (): void => {
     this.dispatchEvent(new Event('deviceschange'));
   };
+
+  private async requestStream(settings: CameraSettings): Promise<MediaStream> {
+    const mediaDevices = this.#mediaDevices;
+    if (!mediaDevices?.getUserMedia) throw new Error('Camera API is unavailable');
+    const preferred: MediaStreamConstraints = {
+      audio: false,
+      video: {
+        deviceId: settings.deviceId ? { exact: settings.deviceId } : undefined,
+        width: { ideal: settings.width },
+        height: { ideal: settings.height },
+        frameRate: { ideal: settings.frameRate, max: Math.min(settings.frameRate, 60) },
+      },
+    };
+    try {
+      return await mediaDevices.getUserMedia(preferred);
+    } catch (error) {
+      if (!(error instanceof DOMException) || error.name !== 'OverconstrainedError') throw error;
+      return mediaDevices.getUserMedia({
+        audio: false,
+        video: { deviceId: settings.deviceId ? { exact: settings.deviceId } : undefined },
+      });
+    }
+  }
+
+  private assertCurrent(operation: number, stream: MediaStream): void {
+    if (operation === this.#operation && !this.#disposed) return;
+    this.releaseStream(stream);
+    throw new DOMException('Camera start was superseded by a newer request', 'AbortError');
+  }
+
+  private releaseActiveStream(): void {
+    const stream = this.#stream;
+    this.#stream = undefined;
+    this.releaseStream(stream);
+    this.video.srcObject = null;
+  }
+
+  private releaseStream(stream: MediaStream | undefined): void {
+    if (!stream) return;
+    for (const track of stream.getTracks()) track.stop();
+  }
 }

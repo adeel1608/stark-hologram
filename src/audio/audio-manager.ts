@@ -43,4 +43,10 @@ export class AudioManager {
     oscillator.start(start);
     oscillator.stop(start + 0.13);
   }
+
+  dispose(): void {
+    const context = this.#context;
+    this.#context = undefined;
+    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
+  }
 }

@@ -41,6 +41,7 @@ let calibration = calibrationStore.load();
 let latestUpdate: InteractionUpdate | undefined;
 let selectedTelemetryChannel = 'joint-1';
 let toastTimer = 0;
+let cameraOperation = 0;
 
 const modeCode: Record<VisualMode, string> = {
   holographic: 'HLO',
@@ -155,21 +156,32 @@ function updateInteractionUi(update: InteractionUpdate): void {
   element('depth-value').textContent = update.depth.available
     ? `${relativeZ >= 0 ? '+' : ''}${relativeZ.toFixed(2)}`
     : 'CAL';
-  element<HTMLMeterElement>('calibration-quality').value = update.depth.stability;
+  element<HTMLMeterElement>('calibration-quality').value = update.depth.available
+    ? update.depth.stability
+    : update.depth.calibrationProgress;
   element('calibration-status').textContent = update.depth.available
     ? `Baseline ready · ${(update.depth.stability * 100).toFixed(0)}% temporal stability`
-    : 'Calibrating neutral pose · hold one hand still';
+    : update.depth.calibrationProgress < 1
+      ? `Collecting a still neutral pose · ${(update.depth.calibrationProgress * 100).toFixed(0)}%`
+      : 'Pose variation is too high · hold one hand still';
   benchmark.record(update, scene.snapshot());
   if (update.depth.available && update.depth.stability > 0.85 && !calibration.neutralPalmScale) {
     calibration = {
       ...calibration,
       neutralPalmScale: update.depth.baseline,
+      neutralPalmFeatures: update.depth.baselineFeatures,
       calibratedAt: new Date().toISOString(),
     };
     calibrationStore.save(calibration);
   }
   if (update.event) {
-    audio.play(update.event === 'select' ? 'select' : update.event);
+    if (update.event === 'select' || update.event === 'grab' || update.event === 'release') {
+      audio.play(update.event);
+    } else if (update.event === 'tracking-lost') {
+      audio.play('warning');
+    } else if (update.event === 'reset') {
+      audio.play('reset');
+    }
     if (update.event === 'reset') showToast('Two-palm reset confirmed');
   }
 }
@@ -180,7 +192,15 @@ function handleTrackingFrame(frame: TrackingFrame): void {
 
 interaction.onUpdate(updateInteractionUi);
 interaction.setDominantHand(calibration.dominantHand);
-if (calibration.neutralPalmScale) interaction.depth.setBaseline(calibration.neutralPalmScale);
+restoreSavedDepthBaseline();
+
+function restoreSavedDepthBaseline(): void {
+  if (!calibration.neutralPalmScale) return;
+  interaction.depth.setBaseline({
+    palmScale: calibration.neutralPalmScale,
+    features: calibration.neutralPalmFeatures,
+  });
+}
 
 function updateCameraUi(state: CameraState): void {
   const message = element('camera-message');
@@ -239,6 +259,7 @@ async function populateCameras(): Promise<void> {
 }
 
 async function startCamera(): Promise<void> {
+  const operation = ++cameraOperation;
   stopDemo();
   const resolution = element<HTMLSelectElement>('resolution-select').value.split('x').map(Number);
   const settings: CameraSettings = {
@@ -250,13 +271,20 @@ async function startCamera(): Promise<void> {
   };
   try {
     await camera.start(settings);
+    if (operation !== cameraOperation) return;
     overlayCanvas.classList.toggle('mirrored', settings.mirror);
     await tracker.start(video, handleTrackingFrame);
+    if (operation !== cameraOperation) {
+      tracker.stop();
+      camera.stop();
+      return;
+    }
     setInitializationStep('tracker-step', 'Tracking', 'ready');
     element<HTMLDialogElement>('settings-dialog').close();
     showToast('Camera and hand tracker ready');
     void populateCameras();
   } catch (error) {
+    if (operation !== cameraOperation) return;
     const cameraState = camera.getState();
     const message =
       cameraState.status === 'error'
@@ -264,6 +292,8 @@ async function startCamera(): Promise<void> {
         : error instanceof Error
           ? error.message
           : 'Camera or tracker startup failed';
+    tracker.stop();
+    if (cameraState.status === 'active') camera.stop();
     element('camera-message').textContent = `${message} Demo mode remains available.`;
     element('camera-message').classList.add('error');
     setInitializationStep('tracker-step', 'Standby', 'error');
@@ -271,6 +301,7 @@ async function startCamera(): Promise<void> {
 }
 
 function stopCamera(): void {
+  cameraOperation += 1;
   tracker.stop();
   camera.stop();
   overlay.clear();
@@ -307,7 +338,7 @@ demo.addEventListener('phasechange', (event) =>
 
 function startDemo(): void {
   stopCamera();
-  interaction.reset();
+  interaction.reset({ rebaseline: true });
   scene.reset();
   element('camera-empty').hidden = true;
   element('camera-resolution').textContent = 'SYNTHETIC';
@@ -322,7 +353,8 @@ function startDemo(): void {
 function stopDemo(): void {
   if (!demo.running) return;
   demo.stop();
-  interaction.reset();
+  interaction.reset({ rebaseline: true });
+  restoreSavedDepthBaseline();
   overlay.clear();
   element('camera-empty').hidden = false;
   element('camera-resolution').textContent = '—';
@@ -461,7 +493,12 @@ element('volume-input').addEventListener('input', (event) =>
 );
 element('rebaseline-button').addEventListener('click', () => {
   interaction.depth.rebaseline();
-  calibration = { ...calibration, neutralPalmScale: undefined, calibratedAt: undefined };
+  calibration = {
+    ...calibration,
+    neutralPalmScale: undefined,
+    neutralPalmFeatures: undefined,
+    calibratedAt: undefined,
+  };
   calibrationStore.save(calibration);
   showToast('Relative Z baseline cleared. Hold one hand neutral and still.');
 });
@@ -555,5 +592,6 @@ window.addEventListener('beforeunload', () => {
   tracker.dispose();
   camera.dispose();
   pointerInput.stop();
+  audio.dispose();
   scene.dispose();
 });

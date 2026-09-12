@@ -6,30 +6,32 @@ The camera supplies RGB video, not a depth map. This estimator produces normaliz
 
 ## Features and formula
 
-The apparent hand scale is the median of four normalized 2D distances:
+The estimator measures five normalized 2D palm features:
 
-- wrist → middle-finger MCP;
-- index MCP → pinky MCP;
 - wrist → index MCP;
+- wrist → middle-finger MCP;
+- wrist → ring-finger MCP;
 - wrist → pinky MCP.
+- index MCP → pinky MCP.
 
-The first stable frames establish a neutral baseline. A previously saved device-local baseline may be restored.
+The baseline stores the median of each feature across a 15-frame rolling window. A trimmed relative range rejects a moving calibration window while tolerating an isolated outlier. A previously saved, device-local feature baseline may be restored; older scalar baselines remain compatible.
 
 ```text
-rawZ = clamp((baselineScale / currentScale - 1) × gain, -1, +1)
+featureDelta[i] = baselineFeature[i] / currentFeature[i] - 1
+rawZ = clamp(median(featureDelta) × gain, -1, +1)
 ```
 
 A larger apparent hand produces negative relative Z (toward the camera); a smaller hand produces positive relative Z (away). Values inside the dead zone are zeroed, then an exponential moving average filters the signal.
 
-Stability is a heuristic based on recent median absolute deviation of the filtered reading. It is labelled as stability, not sensor accuracy.
+Stability is a heuristic combining recent median absolute deviation of the filtered reading with disagreement between the five feature deltas. Calibration progress, calibration-window variation, and feature disagreement are available to diagnostics. None is labelled as sensor accuracy or ML confidence.
 
 ## Failure behavior
 
 - No hand or invalid geometry: retain the latest value briefly, then mark unavailable.
-- Reacquisition: motion history resets before transforms resume.
+- Reacquisition: the filter restarts from the new raw observation and transform history is re-anchored before transforms resume.
 - Extreme values: clamp to `[-1, +1]`.
 - Manual reset: **Rebaseline** clears saved neutral scale; the next stable frames establish a new one.
 
 ## Limitations
 
-Apparent scale also changes with pose, wrist rotation, lens distortion, and partial occlusion. Calibration improves repeatability but does not make the result metric. A future TrueDepth or external-depth provider can replace this estimator without changing `InteractionController`.
+Apparent scale also changes with pose, wrist rotation, finger splay, lens distortion, cropping, and partial occlusion. Using several features reduces sensitivity to any one landmark pair but cannot remove perspective/pose ambiguity. Calibration improves repeatability; it does not make the result metric. A future TrueDepth or external-depth provider can replace this estimator without changing `InteractionController`.

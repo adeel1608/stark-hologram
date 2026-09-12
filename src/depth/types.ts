@@ -8,6 +8,15 @@ export interface DepthReading {
   baseline: number;
   palmScale: number;
   stability: number;
+  calibrationProgress: number;
+  calibrationVariation: number;
+  featureSpread: number;
+  baselineFeatures?: number[];
+}
+
+export interface RelativeDepthCalibration {
+  palmScale: number;
+  features?: number[];
 }
 
 export interface DepthProvider {

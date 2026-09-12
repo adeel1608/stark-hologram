@@ -15,9 +15,12 @@ export class HandTracker extends EventTarget {
     maxJump: APP_CONFIG.vision.maxLandmarkJump,
   });
   #landmarker?: HandLandmarker;
+  #initializing?: Promise<void>;
   #listener?: TrackingListener;
   #video?: HTMLVideoElement;
   #running = false;
+  #operation = 0;
+  #disposed = false;
   #requestId = 0;
   #lastVideoTime = -1;
   #metrics: TrackingMetrics = { inferenceMs: 0, trackingFps: 0, frameTimestamp: 0, handCount: 0 };
@@ -29,13 +32,25 @@ export class HandTracker extends EventTarget {
   }
 
   async initialize(): Promise<void> {
+    if (this.#disposed) throw new Error('Hand tracker has been disposed');
     if (this.#landmarker) return;
+    if (this.#initializing) return this.#initializing;
     this.dispatchEvent(new CustomEvent('statechange', { detail: 'loading' }));
+    this.#initializing = this.createLandmarker();
+    try {
+      await this.#initializing;
+    } finally {
+      this.#initializing = undefined;
+    }
+  }
+
+  private async createLandmarker(): Promise<void> {
     try {
       const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision');
       const vision = await FilesetResolver.forVisionTasks(APP_CONFIG.vision.wasmUrl);
+      let landmarker: HandLandmarker;
       try {
-        this.#landmarker = await HandLandmarker.createFromOptions(vision, {
+        landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: APP_CONFIG.vision.modelUrl, delegate: 'GPU' },
           runningMode: 'VIDEO',
           numHands: APP_CONFIG.vision.maxHands,
@@ -44,7 +59,7 @@ export class HandTracker extends EventTarget {
           minTrackingConfidence: APP_CONFIG.vision.minTrackingConfidence,
         });
       } catch {
-        this.#landmarker = await HandLandmarker.createFromOptions(vision, {
+        landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: APP_CONFIG.vision.modelUrl, delegate: 'CPU' },
           runningMode: 'VIDEO',
           numHands: APP_CONFIG.vision.maxHands,
@@ -53,6 +68,11 @@ export class HandTracker extends EventTarget {
           minTrackingConfidence: APP_CONFIG.vision.minTrackingConfidence,
         });
       }
+      if (this.#disposed) {
+        landmarker.close();
+        throw new Error('Hand tracker was disposed during initialization');
+      }
+      this.#landmarker = landmarker;
     } catch {
       this.dispatchEvent(new CustomEvent('statechange', { detail: 'error' }));
       throw new Error('Hand tracker assets could not be initialized');
@@ -61,8 +81,12 @@ export class HandTracker extends EventTarget {
   }
 
   async start(video: HTMLVideoElement, listener: TrackingListener): Promise<void> {
+    const operation = ++this.#operation;
     await this.initialize();
-    this.stop();
+    if (operation !== this.#operation || this.#disposed) {
+      throw new DOMException('Hand tracker start was superseded', 'AbortError');
+    }
+    this.stopLoop();
     this.#video = video;
     this.#listener = listener;
     this.#running = true;
@@ -71,13 +95,13 @@ export class HandTracker extends EventTarget {
   }
 
   stop(): void {
-    this.#running = false;
-    if (this.#requestId) cancelAnimationFrame(this.#requestId);
-    this.#requestId = 0;
-    this.#smoother.reset();
+    this.#operation += 1;
+    this.stopLoop();
   }
 
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     this.stop();
     this.#landmarker?.close();
     this.#landmarker = undefined;
@@ -125,6 +149,18 @@ export class HandTracker extends EventTarget {
     }
     this.schedule();
   };
+
+  private stopLoop(): void {
+    this.#running = false;
+    if (this.#requestId) cancelAnimationFrame(this.#requestId);
+    this.#requestId = 0;
+    this.#listener = undefined;
+    this.#video = undefined;
+    this.#lastVideoTime = -1;
+    this.#trackedFrames = 0;
+    this.#fpsWindowStarted = performance.now();
+    this.#smoother.reset();
+  }
 
   private convertResult(result: HandLandmarkerResult): TrackedHand[] {
     return result.landmarks.map((landmarks, index) => {
