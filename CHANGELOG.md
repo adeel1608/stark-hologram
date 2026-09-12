@@ -12,6 +12,13 @@ This project follows semantic versioning once release tags are created. Entries 
 - Keep gesture identity stable through isolated handedness-label flips and enforce release cooldown.
 - Require a still multi-feature calibration window before enabling relative depth.
 - Preserve a saved depth baseline across ordinary scene and gesture resets.
+- Disconnect resize/pointer listeners and dispose Three.js geometry, material, texture, skeleton, and renderer resources.
+- Preserve original visibility and material state across isolate, fade, visualization-mode, and restore transitions.
+
+### Added
+
+- Local GLB and CORS-enabled GLB/glTF URL import with validation, race-safe replacement, automatic centering/scaling, semantic mesh discovery, and procedural fallback.
+- Keyboard-accessible component navigation and renderer memory diagnostics.
 
 ### Remaining
 
@@ -36,7 +43,7 @@ The initial Flask/MediaPipe Hands building prototype remains available through G
 - `v0.3`: camera and tracking validation
 - `v0.4`: tuned gesture vocabulary
 - `v0.5`: evaluated relative spatial depth
-- `v0.6`: licensed/model-import digital twin workflow
+- `v0.6`: model-import validation with representative licensed contributor assets
 - `v0.7`: spatial UI accessibility polish
 - `v0.8`: live telemetry adapters and expanded diagnostics
 - `v0.9`: published demo and benchmark dataset

@@ -22,4 +22,18 @@ describe('ComponentRegistry', () => {
   it('returns undefined for an unregistered object', () => {
     expect(new ComponentRegistry().fromObject(new Group())).toBeUndefined();
   });
+
+  it('rejects duplicate semantic IDs instead of silently replacing a component', () => {
+    const registry = new ComponentRegistry();
+    const metadata = {
+      id: 'J01',
+      name: 'Joint',
+      type: 'Joint' as const,
+      material: 'Steel',
+      telemetryChannel: 'joint-1',
+    };
+    registry.register(new Group(), metadata);
+    expect(() => registry.register(new Group(), metadata)).toThrow('Duplicate component ID');
+    expect(registry.size).toBe(1);
+  });
 });

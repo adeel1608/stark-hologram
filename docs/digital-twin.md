@@ -20,6 +20,35 @@ Raycasting walks upward from render meshes to the nearest registered component. 
 - hierarchy-aware isolation and hide/show restore;
 - deterministic radial exploded view;
 - holographic, blueprint, solid, and diagnostic materials;
-- GLTF/GLB loading through Three.js `GLTFLoader`.
+- local GLB and HTTP(S) GLB/glTF loading through a lazily imported Three.js `GLTFLoader`.
 
-The procedural model remains the fallback even after licensed GLTF assets are added. A future import UI should validate file size/type, register semantic nodes from agreed metadata, and document every bundled asset's license.
+## Importing a model
+
+Open **Camera & interaction → Digital twin model**. Choose either:
+
+- a self-contained local `.glb` file up to 50 MB; or
+- an HTTP(S) `.glb`/`.gltf` URL whose server permits browser CORS requests. External buffers and textures referenced by a `.gltf` file must also be reachable relative to that URL.
+
+Local files are parsed in the browser and are not uploaded by this project. Loading a URL makes an explicit browser request to the named host; that host applies its own access logs and privacy policy.
+
+On success, the importer:
+
+1. clones mesh materials so highlighting one component cannot mutate another component that shared a material;
+2. computes finite bounds, centers the asset, and uniformly scales its largest dimension to the inspection envelope;
+3. registers every mesh as a selectable component with collision-safe IDs and naming fallbacks;
+4. preserves original solid-mode material properties while applying reversible holographic modes;
+5. retains the procedural model for one-click restoration; and
+6. disposes geometries, cloned materials, textures, skeleton resources, listeners, and obsolete imports when replaced.
+
+glTF node `extras` can provide semantic hints inherited by descendant meshes:
+
+| Extra               | Meaning                                                                |
+| ------------------- | ---------------------------------------------------------------------- |
+| `componentId`       | Preferred stable ID; duplicate IDs receive a numeric suffix            |
+| `componentName`     | Inspector display name                                                 |
+| `componentType`     | Assembly, Base, Joint, Link, Tool, Workpiece, Cell, or Component       |
+| `componentMaterial` | Human-readable material description                                    |
+| `telemetryChannel`  | Channel passed to the active telemetry provider                        |
+| `explodable`        | Set to `false` to keep the mesh fixed during exploded-view transitions |
+
+The loader rejects empty/oversized local files, unsupported URL protocols, ambiguous extensions, zero-sized bounds, and models without selectable meshes. A failed or superseded load leaves the current model intact. No third-party robot model is bundled; contributors must document redistribution rights before committing an asset.

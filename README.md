@@ -24,7 +24,7 @@ No camera, robot, backend, iPhone, depth sensor, or paid service is required.
 - Current MediaPipe Tasks Hand Landmarker integration for up to two hands, handedness, 21 image landmarks, world landmarks, frame timestamps, and measured inference timing
 - EMA landmark smoothing, extreme-jump protection, pinch hysteresis, candidate/confirmation/release states, temporal gating, and dominant-hand preference
 - Honest monocular **relative Z** from multiple apparent hand-scale features, with automatic/saved baseline, dead zone, smoothing, bounds, stability estimate, and tracking-loss handling
-- Procedural articulated robot cell with semantic component registry, raycast selection, highlighting, isolation, visibility control, exploded view, and GLTF loader support
+- Procedural articulated robot cell plus local GLB/URL GLB-glTF import, semantic component discovery, raycast/keyboard selection, highlighting, isolation, visibility control, and exploded view
 - Deterministic simulated telemetry bound to selected components
 - Holographic, blueprint, solid, and diagnostic render modes
 - Mouse and keyboard fallbacks, responsive layout, onboarding, audio controls, and camera-denied/demo paths
@@ -160,13 +160,13 @@ The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendo
 - MediaPipe model initialization currently needs network access; inference is then local in the browser.
 - Camera and inference performance depends on the browser, camera driver, lighting, and CPU/GPU.
 - This session did not physically validate iPhone/Camo, iPad, or generic webcam paths; the required manual matrix is documented.
-- GLTF loading is supported by the scene API, but the flagship bundled model is procedural so the repository has no third-party robot-asset licensing burden.
+- Local GLB and CORS-enabled GLB/glTF URL import are available from settings. Imported meshes receive semantic fallbacks, safe cloned materials, automatic centering/scaling, selection, disposal, and procedural fallback. The repository still carries no third-party robot-asset licensing burden.
 - Telemetry is simulated and clearly labelled; there is no live robot connectivity yet.
 
 ## Roadmap
 
 1. Run and publish the documented camera/distance/lighting study without fabricating results.
-2. Add a licensed reference GLB and user-facing model import flow.
+2. Validate contributor-supplied industrial GLB assets and refine semantic metadata conventions.
 3. Move MediaPipe inference to a worker if measured UI contention justifies it.
 4. Add recorded landmark-session import and replay.
 5. Implement provider adapters for ROS 2/WebSocket/MQTT telemetry.

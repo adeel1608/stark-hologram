@@ -5,6 +5,9 @@ export class ComponentRegistry {
   readonly #components = new Map<string, TwinComponent>();
 
   register(object: Object3D, metadata: ComponentMetadata): TwinComponent {
+    if (this.#components.has(metadata.id)) {
+      throw new Error(`Duplicate component ID: ${metadata.id}`);
+    }
     const component = { ...metadata, object };
     object.userData.componentId = metadata.id;
     this.#components.set(metadata.id, component);
@@ -27,5 +30,9 @@ export class ComponentRegistry {
 
   values(): TwinComponent[] {
     return [...this.#components.values()];
+  }
+
+  get size(): number {
+    return this.#components.size;
   }
 }

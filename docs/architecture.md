@@ -59,3 +59,7 @@ No backend is required. Browser storage contains preferences only. Exported obse
 ## Extensibility boundaries
 
 Future TrueDepth, external depth, ROS 2, MQTT, WebXR, or learned gesture classifiers should enter through provider/adaptor boundaries. Native mobile capture would be a separate companion, not a reason to couple the browser core to an Apple-only API.
+
+## Three.js resource ownership
+
+`TwinScene` owns the render loop, resize observer, canvas listener, renderer, environment geometry/materials, procedural model, and current imported model. Model replacement is generation-guarded. Imported materials are cloned before visual-mode mutation, original material state is restored between modes, and replaced/final resources are explicitly disposed. The GLTF loader is dynamically imported only when a user requests a model.

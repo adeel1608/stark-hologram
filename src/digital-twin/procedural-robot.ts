@@ -172,9 +172,6 @@ export function createProceduralRobot(): RobotResult {
   });
   root.add(workpiece);
 
-  root.rotation.y = -0.44;
-  root.position.y = -1.25;
-
   return {
     root,
     registry,

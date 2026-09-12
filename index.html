@@ -99,8 +99,8 @@
           <div class="stage-caption">
             <span>DT–R01</span>
             <div>
-              <strong>Articulated Inspection Cell</strong
-              ><small>Procedural reference twin · simulated telemetry</small>
+              <strong id="model-title">Articulated Inspection Cell</strong
+              ><small id="model-caption">Procedural reference twin · simulated telemetry</small>
             </div>
           </div>
         </section>
@@ -111,6 +111,11 @@
               <span>04</span>
               <h2>Component</h2>
             </div>
+            <label class="component-picker" for="component-select"
+              >Keyboard component navigator<select id="component-select">
+                <option value="">Robot assembly</option>
+              </select></label
+            >
             <div class="component-title">
               <small>Selected node</small>
               <strong id="component-name">Robot assembly</strong>
@@ -123,7 +128,7 @@
               </div>
               <div>
                 <dt>Status</dt>
-                <dd class="nominal" id="component-status">Nominal</dd>
+                <dd class="nominal" id="component-status">Simulated</dd>
               </div>
               <div>
                 <dt>Material</dt>
@@ -135,10 +140,10 @@
               </div>
             </dl>
             <div class="component-actions">
-              <button id="isolate-button" type="button">Isolate</button>
-              <button id="visibility-button" type="button">Hide</button>
-              <button id="transparency-button" type="button">Fade</button>
-              <button id="restore-button" type="button">Restore</button>
+              <button id="isolate-button" type="button" disabled>Isolate</button>
+              <button id="visibility-button" type="button" disabled>Hide</button>
+              <button id="transparency-button" type="button" disabled>Fade</button>
+              <button id="restore-button" type="button">Restore all</button>
             </div>
           </section>
 
@@ -221,12 +226,12 @@
       </footer>
     </div>
 
-    <dialog id="settings-dialog" class="system-dialog panel-cut">
+    <dialog id="settings-dialog" class="system-dialog panel-cut" aria-labelledby="settings-title">
       <form method="dialog" class="dialog-shell">
         <header>
           <div>
             <p class="eyebrow">Input configuration</p>
-            <h2>Camera & interaction</h2>
+            <h2 id="settings-title">Camera & interaction</h2>
           </div>
           <button class="icon-button" value="close" aria-label="Close settings">×</button>
         </header>
@@ -293,15 +298,46 @@
             Reset saved setup
           </button>
         </div>
+        <fieldset class="model-import">
+          <legend>Digital twin model</legend>
+          <p>
+            Import a self-contained GLB from this device or load a GLB/glTF URL with CORS access.
+            The procedural robot remains available as the safe fallback.
+          </p>
+          <label for="model-url"
+            >Model URL<input
+              id="model-url"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="https://example.com/robot.glb"
+          /></label>
+          <div class="model-import-actions">
+            <button id="model-url-button" class="quiet-button" type="button">Load URL</button>
+            <label class="file-button" for="model-file">Choose local GLB</label>
+            <input id="model-file" type="file" accept=".glb,model/gltf-binary" />
+            <button id="model-restore-button" class="quiet-button" type="button">
+              Restore demo robot
+            </button>
+          </div>
+          <output id="model-status" class="inline-message" aria-live="polite"
+            >Procedural model active · no third-party asset loaded.</output
+          >
+        </fieldset>
       </form>
     </dialog>
 
-    <dialog id="diagnostics-dialog" class="system-dialog wide-dialog panel-cut">
+    <dialog
+      id="diagnostics-dialog"
+      class="system-dialog wide-dialog panel-cut"
+      aria-labelledby="diagnostics-title"
+    >
       <form method="dialog" class="dialog-shell">
         <header>
           <div>
             <p class="eyebrow">Measured runtime data</p>
-            <h2>Diagnostics & benchmark capture</h2>
+            <h2 id="diagnostics-title">Diagnostics & benchmark capture</h2>
           </div>
           <button class="icon-button" value="close" aria-label="Close diagnostics">×</button>
         </header>
@@ -393,6 +429,14 @@
                 <dt>Components</dt>
                 <dd id="diag-components">—</dd>
               </div>
+              <div>
+                <dt>GPU geometries</dt>
+                <dd id="diag-geometries">—</dd>
+              </div>
+              <div>
+                <dt>GPU textures</dt>
+                <dd id="diag-textures">—</dd>
+              </div>
             </dl>
           </section>
           <section>
@@ -422,12 +466,12 @@
       </form>
     </dialog>
 
-    <dialog id="help-dialog" class="system-dialog panel-cut">
+    <dialog id="help-dialog" class="system-dialog panel-cut" aria-labelledby="help-title">
       <form method="dialog" class="dialog-shell">
         <header>
           <div>
             <p class="eyebrow">Accessible fallback controls</p>
-            <h2>Interaction map</h2>
+            <h2 id="help-title">Interaction map</h2>
           </div>
           <button class="icon-button" value="close" aria-label="Close controls">×</button>
         </header>
@@ -450,7 +494,11 @@
       </form>
     </dialog>
 
-    <dialog id="onboarding-dialog" class="system-dialog onboarding-dialog panel-cut">
+    <dialog
+      id="onboarding-dialog"
+      class="system-dialog onboarding-dialog panel-cut"
+      aria-labelledby="onboarding-title"
+    >
       <div class="dialog-shell">
         <header>
           <div>

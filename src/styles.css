@@ -576,6 +576,21 @@ h1 {
 .inspector-panel {
   flex: 0 0 auto;
 }
+.component-picker {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 11px;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+.component-picker select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: #06161d;
+  color: #d4eef2;
+  padding: 0 8px;
+}
 .component-title {
   display: grid;
   gap: 4px;
@@ -638,6 +653,10 @@ h1 {
 .quiet-button:hover {
   border-color: var(--cyan);
   color: var(--cyan-bright);
+}
+.component-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 .telemetry-panel {
   flex: 1;
@@ -837,13 +856,17 @@ h1 {
   font-size: 0.76rem;
 }
 .dialog-shell select,
-.dialog-shell input[type='range'] {
+.dialog-shell input[type='range'],
+.dialog-shell input[type='url'] {
   width: 100%;
   min-height: 39px;
   border: 1px solid var(--line);
   background: #06161d;
   color: #ddf8fc;
   padding: 0 10px;
+}
+.dialog-shell input[type='url'] {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .switch-row {
   grid-template-columns: 1fr auto !important;
@@ -920,6 +943,72 @@ h1 {
 }
 .calibration-block button:last-child {
   grid-column: 2;
+}
+.model-import {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 35, 43, 0.28);
+}
+.model-import legend {
+  padding: 0 6px;
+  color: var(--cyan-bright);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+}
+.model-import p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.model-import > label {
+  display: grid;
+  gap: 7px;
+  color: #aac3c8;
+  font-size: 0.76rem;
+}
+.model-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.model-import-actions button,
+.file-button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+}
+.file-button {
+  border: 1px solid var(--line);
+  background: rgba(8, 35, 43, 0.55);
+  color: #ddf8fc;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.file-button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan-bright);
+}
+#model-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.file-button:has(+ #model-file:focus-visible) {
+  outline: 2px solid var(--cyan-bright);
+  outline-offset: 2px;
+}
+.model-import .inline-message {
+  display: block;
 }
 .diagnostic-grid {
   display: grid;

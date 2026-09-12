@@ -42,6 +42,7 @@ let latestUpdate: InteractionUpdate | undefined;
 let selectedTelemetryChannel = 'joint-1';
 let toastTimer = 0;
 let cameraOperation = 0;
+let modelOperation = 0;
 
 const modeCode: Record<VisualMode, string> = {
   holographic: 'HLO',
@@ -114,24 +115,85 @@ function setVisualMode(mode: VisualMode, withAudio = true): void {
 }
 
 function updateComponentPanel(): void {
-  const componentId = element('component-id').textContent.split('/').at(-1)?.trim();
-  const component = componentId ? scene.registry.get(componentId) : undefined;
+  const component = scene.selection;
   element('component-visibility').textContent =
     component?.object.visible === false
       ? 'Hidden'
-      : component?.object.userData.forceTransparent === true
+      : scene.isTransparent(component)
         ? '18%'
         : '100%';
+  const actionIds = ['isolate-button', 'visibility-button', 'transparency-button'] as const;
+  for (const id of actionIds) element<HTMLButtonElement>(id).disabled = !component;
+  element('visibility-button').textContent = component?.object.visible === false ? 'Show' : 'Hide';
+  element('transparency-button').textContent = scene.isTransparent(component) ? 'Unfade' : 'Fade';
+  element<HTMLSelectElement>('component-select').value = component?.id ?? '';
+}
+
+function populateComponentNavigator(): void {
+  const select = element<HTMLSelectElement>('component-select');
+  const selected = scene.selection?.id ?? '';
+  select.replaceChildren(new Option(`${scene.modelSummary.label} · assembly`, ''));
+  for (const component of scene.registry.values()) {
+    select.add(new Option(`${component.id} · ${component.name}`, component.id));
+  }
+  select.value = scene.registry.get(selected) ? selected : '';
+}
+
+function updateModelUi(): void {
+  const summary = scene.modelSummary;
+  element('model-title').textContent = summary.label;
+  element('model-caption').textContent =
+    summary.source === 'procedural'
+      ? `Procedural reference twin · ${summary.componentCount} components · simulated telemetry`
+      : `Imported ${summary.source.toUpperCase()} · ${summary.componentCount} selectable meshes · simulated telemetry`;
+  populateComponentNavigator();
+  updateComponentPanel();
 }
 
 scene.onSelection((component) => {
-  element('component-name').textContent = component?.name ?? 'Robot assembly';
-  element('component-id').textContent = component ? `DT–R01 / ${component.id}` : 'DT–R01 / ROOT';
+  element('component-name').textContent = component?.name ?? scene.modelSummary.label;
+  const modelCode = scene.modelSummary.source === 'procedural' ? 'DT–R01' : 'IMPORT';
+  element('component-id').textContent = component
+    ? `${modelCode} / ${component.id}`
+    : `${modelCode} / ROOT`;
   element('component-type').textContent = component?.type ?? 'Assembly';
   element('component-material').textContent = component?.material ?? 'Composite';
+  element('component-status').textContent = 'Simulated';
   selectedTelemetryChannel = component?.telemetryChannel ?? 'joint-1';
   updateComponentPanel();
 });
+updateModelUi();
+
+async function loadModel(
+  source: { kind: 'url'; url: string } | { kind: 'file'; file: File },
+): Promise<void> {
+  const operation = ++modelOperation;
+  const status = element('model-status');
+  const controls = [
+    element<HTMLButtonElement>('model-url-button'),
+    element<HTMLButtonElement>('model-restore-button'),
+    element<HTMLInputElement>('model-file'),
+  ];
+  for (const control of controls) control.disabled = true;
+  status.classList.remove('error');
+  status.textContent = source.kind === 'file' ? `Reading ${source.file.name}…` : 'Loading model…';
+  try {
+    const summary = await scene.loadGltf(source);
+    if (operation !== modelOperation) return;
+    updateModelUi();
+    status.textContent = `${summary.label} active · ${summary.componentCount} selectable mesh components · scale ${summary.appliedScale.toFixed(3)}×`;
+    showToast(`Loaded ${summary.label}`);
+  } catch (error) {
+    if (operation !== modelOperation) return;
+    status.classList.add('error');
+    status.textContent =
+      error instanceof Error
+        ? `${error.message}. The current model remains active.`
+        : 'The model could not be loaded. The current model remains active.';
+  } finally {
+    if (operation === modelOperation) for (const control of controls) control.disabled = false;
+  }
+}
 
 function updateInteractionUi(update: InteractionUpdate): void {
   latestUpdate = update;
@@ -439,6 +501,8 @@ function updateDiagnostics(): void {
   element('diag-render-fps').textContent = `${render.fps.toFixed(1)} FPS`;
   element('diag-triangles').textContent = render.triangles.toLocaleString();
   element('diag-components').textContent = String(render.objects);
+  element('diag-geometries').textContent = String(render.geometries);
+  element('diag-textures').textContent = String(render.textures);
   element('diag-tracking-source').textContent = latestUpdate?.frame.source ?? 'None';
   element('benchmark-count').textContent = benchmark.count.toLocaleString();
 }
@@ -448,6 +512,10 @@ element('visual-mode').addEventListener('click', (event) => {
   if (button?.dataset.mode) setVisualMode(button.dataset.mode as VisualMode);
 });
 
+element('component-select').addEventListener('change', (event) => {
+  const id = (event.target as HTMLSelectElement).value;
+  scene.select(id ? scene.registry.get(id) : undefined);
+});
 element('isolate-button').addEventListener('click', () => {
   scene.isolate();
   updateComponentPanel();
@@ -463,6 +531,25 @@ element('transparency-button').addEventListener('click', () => {
 element('restore-button').addEventListener('click', () => {
   scene.restoreVisibility();
   updateComponentPanel();
+});
+element('model-url-button').addEventListener('click', () => {
+  const url = element<HTMLInputElement>('model-url').value;
+  void loadModel({ kind: 'url', url });
+});
+element('model-file').addEventListener('change', (event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (file) void loadModel({ kind: 'file', file });
+  input.value = '';
+});
+element('model-restore-button').addEventListener('click', () => {
+  modelOperation += 1;
+  const summary = scene.restoreProceduralModel();
+  updateModelUi();
+  const status = element('model-status');
+  status.classList.remove('error');
+  status.textContent = 'Procedural model active · no third-party asset loaded.';
+  showToast(`Restored ${summary.label}`);
 });
 element('camera-button').addEventListener('click', () => {
   openDialog('settings-dialog');
@@ -540,9 +627,21 @@ element('onboarding-skip').addEventListener('click', () => closeOnboarding(true)
 element('onboarding-skip-top').addEventListener('click', () => closeOnboarding(true));
 
 window.addEventListener('keydown', (event) => {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+  const target = event.target;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLButtonElement ||
+    (target instanceof HTMLElement && target.isContentEditable) ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey
+  )
+    return;
   const command = keyToCommand(event.key, event.shiftKey);
   if (!command) return;
+  event.preventDefault();
   if (command.type === 'mode') {
     setVisualMode(command.mode);
     if (command.mode === 'diagnostic') openDialog('diagnostics-dialog');
