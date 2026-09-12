@@ -85,6 +85,20 @@
               </div>
               <span id="camera-resolution" class="camera-resolution">—</span>
             </div>
+            <div id="demo-transport" class="demo-transport" hidden>
+              <button id="demo-play-button" type="button" aria-label="Pause demo">Pause</button>
+              <button id="demo-restart-button" type="button">Restart</button>
+              <label for="demo-speed"
+                >Speed<select id="demo-speed">
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="2">2×</option>
+                </select></label
+              >
+              <progress id="demo-progress" max="1" value="0">0%</progress>
+              <output id="demo-time">0.0 / 12.0 s</output>
+            </div>
           </section>
         </aside>
 
@@ -95,6 +109,7 @@
             <span><i class="x"></i>X <b id="axis-x">0.00</b></span>
             <span><i class="y"></i>Y <b id="axis-y">0.00</b></span>
             <span><i class="z"></i>Z <b id="axis-z">0.00</b></span>
+            <span>EXP <b id="axis-explode">0%</b></span>
           </div>
           <div class="stage-caption">
             <span>DT–R01</span>
@@ -457,6 +472,46 @@
             </dl>
           </section>
         </div>
+        <fieldset class="benchmark-metadata">
+          <legend>Session metadata</legend>
+          <label for="benchmark-device"
+            >Test device<input
+              id="benchmark-device"
+              type="text"
+              autocomplete="off"
+              placeholder="e.g. laptop + webcam"
+          /></label>
+          <label for="benchmark-lighting"
+            >Lighting<select id="benchmark-lighting">
+              <option value="not recorded">Not recorded</option>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="bright">Bright</option>
+              <option value="backlit">Backlit</option>
+            </select></label
+          >
+          <label for="benchmark-distance"
+            >Distance (m)<input
+              id="benchmark-distance"
+              type="number"
+              min="0.1"
+              max="10"
+              step="0.1"
+              inputmode="decimal"
+              placeholder="Optional"
+          /></label>
+          <label for="benchmark-notes" class="benchmark-notes"
+            >Notes<textarea
+              id="benchmark-notes"
+              rows="2"
+              placeholder="Condition, task, exclusions"
+            ></textarea>
+          </label>
+          <p>
+            Capture starts only when requested. Exports contain observations and labels, never
+            camera frames or landmark coordinates.
+          </p>
+        </fieldset>
         <div class="benchmark-actions">
           <span id="benchmark-status">Recorder stopped</span
           ><button id="record-button" class="primary-button" type="button">Start recording</button

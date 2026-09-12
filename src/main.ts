@@ -5,7 +5,7 @@ import { CalibrationStore } from './calibration/calibration-store';
 import { CameraManager } from './camera/camera-manager';
 import type { CameraOption, CameraSettings, CameraState } from './camera/types';
 import type { DominantHand, VisualMode } from './config';
-import { DemoProvider, type DemoPhase } from './demo/demo-provider';
+import { DEMO_DURATION_SECONDS, DemoProvider, type DemoPhase } from './demo/demo-provider';
 import { PointerInput } from './input/pointer-input';
 import { keyToCommand } from './input/keymap';
 import {
@@ -43,6 +43,8 @@ let selectedTelemetryChannel = 'joint-1';
 let toastTimer = 0;
 let cameraOperation = 0;
 let modelOperation = 0;
+const appVersion = '0.2.0';
+const appCommit = import.meta.env.VITE_COMMIT_SHA ?? 'development';
 
 const modeCode: Record<VisualMode, string> = {
   holographic: 'HLO',
@@ -226,7 +228,9 @@ function updateInteractionUi(update: InteractionUpdate): void {
     : update.depth.calibrationProgress < 1
       ? `Collecting a still neutral pose · ${(update.depth.calibrationProgress * 100).toFixed(0)}%`
       : 'Pose variation is too high · hold one hand still';
-  benchmark.record(update, scene.snapshot());
+  benchmark.record(update, scene.snapshot(), {
+    trackingFps: update.frame.source === 'camera' ? tracker.metrics.trackingFps : undefined,
+  });
   if (update.depth.available && update.depth.stability > 0.85 && !calibration.neutralPalmScale) {
     calibration = {
       ...calibration,
@@ -409,6 +413,8 @@ function startDemo(): void {
   setInitializationStep('camera-step', 'Demo', 'ready');
   setInitializationStep('tracker-step', 'Synthetic', 'ready');
   element('demo-button').innerHTML = '<span>■</span> Stop demo';
+  element('demo-transport').hidden = false;
+  updateDemoTransport();
   demo.start(handleTrackingFrame);
 }
 
@@ -425,6 +431,14 @@ function stopDemo(): void {
   setInitializationStep('camera-step', 'Standby', 'busy');
   setInitializationStep('tracker-step', 'Standby', 'busy');
   element('demo-button').innerHTML = '<span>▶</span> Try demo';
+  element('demo-transport').hidden = true;
+}
+
+function updateDemoTransport(): void {
+  const button = element<HTMLButtonElement>('demo-play-button');
+  button.textContent = demo.paused ? 'Play' : 'Pause';
+  button.setAttribute('aria-label', demo.paused ? 'Resume demo' : 'Pause demo');
+  element<HTMLSelectElement>('demo-speed').value = String(demo.speed);
 }
 
 function renderOnboarding(): void {
@@ -597,17 +611,63 @@ element('reset-calibration-button').addEventListener('click', () => {
   showToast('Saved calibration and onboarding state reset');
 });
 element('demo-button').addEventListener('click', () => (demo.running ? stopDemo() : startDemo()));
+element('demo-play-button').addEventListener('click', () => {
+  if (demo.paused) demo.resume();
+  else demo.pause();
+  updateDemoTransport();
+});
+element('demo-restart-button').addEventListener('click', () => {
+  interaction.reset({ rebaseline: true });
+  demo.restart();
+  updateDemoTransport();
+});
+element('demo-speed').addEventListener('change', (event) => {
+  demo.setSpeed(Number((event.target as HTMLSelectElement).value));
+  updateDemoTransport();
+});
+demo.addEventListener('playstatechange', updateDemoTransport);
 element('diagnostics-button').addEventListener('click', () => openDialog('diagnostics-dialog'));
 element('help-button').addEventListener('click', () => openDialog('help-dialog'));
 element('record-button').addEventListener('click', () => {
   if (benchmark.recording) benchmark.stop();
-  else benchmark.start();
+  else {
+    const cameraState = camera.getState();
+    const distanceValue = element<HTMLInputElement>('benchmark-distance').valueAsNumber;
+    benchmark.start({
+      appVersion,
+      commit: appCommit,
+      browser: navigator.userAgent,
+      device: element<HTMLInputElement>('benchmark-device').value,
+      camera:
+        cameraState.status === 'active'
+          ? cameraState.label
+          : demo.running
+            ? 'Synthetic demo'
+            : 'Not active',
+      cameraResolution:
+        cameraState.status === 'active'
+          ? `${cameraState.width}x${cameraState.height}`
+          : 'Not reported',
+      lightingCondition: element<HTMLSelectElement>('benchmark-lighting').value,
+      distanceMeters: Number.isFinite(distanceValue) ? distanceValue : undefined,
+      notes: element<HTMLTextAreaElement>('benchmark-notes').value,
+    });
+  }
 });
 benchmark.addEventListener('change', () => {
   element('record-button').textContent = benchmark.recording ? 'Stop recording' : 'Start recording';
+  for (const id of [
+    'benchmark-device',
+    'benchmark-lighting',
+    'benchmark-distance',
+    'benchmark-notes',
+  ]) {
+    element<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(id).disabled =
+      benchmark.recording;
+  }
   element('benchmark-status').textContent = benchmark.recording
     ? `Recording · ${benchmark.count} samples`
-    : `Recorder stopped · ${benchmark.count} samples`;
+    : `Recorder stopped · ${benchmark.count} samples${benchmark.droppedCount ? ` · ${benchmark.droppedCount} overwritten` : ''}`;
 });
 element('export-json-button').addEventListener('click', () => benchmark.download('json'));
 element('export-csv-button').addEventListener('click', () => benchmark.download('csv'));
@@ -666,6 +726,7 @@ setInterval(() => {
   element('axis-x').textContent = transform.x.toFixed(2);
   element('axis-y').textContent = transform.y.toFixed(2);
   element('axis-z').textContent = transform.z.toFixed(2);
+  element('axis-explode').textContent = `${Math.round(transform.exploded * 100)}%`;
   if (!latestUpdate?.depth.available)
     element('depth-value').textContent = `${transform.z >= 0 ? '+' : ''}${transform.z.toFixed(2)}`;
 
@@ -679,6 +740,12 @@ setInterval(() => {
   element('telemetry-cycle').textContent = String(sample.cycleCount).padStart(6, '0');
   element('telemetry-tool').textContent = sample.toolStatus;
   updateDiagnostics();
+  if (demo.running) {
+    const progress = demo.progress;
+    element<HTMLProgressElement>('demo-progress').value = progress;
+    element('demo-time').textContent =
+      `${(progress * DEMO_DURATION_SECONDS).toFixed(1)} / ${DEMO_DURATION_SECONDS.toFixed(1)} s`;
+  }
 }, 250);
 
 renderOnboarding();

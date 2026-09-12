@@ -16,6 +16,11 @@ export interface TransformSnapshot {
   z: number;
   rotationY: number;
   scale: number;
+  exploded: number;
+  visualMode: VisualMode;
+  selectedComponentId?: string;
+  modelLabel: string;
+  modelSource: ModelSummary['source'];
 }
 
 export interface ModelSummary {
@@ -196,6 +201,10 @@ export class TwinScene {
         };
   }
 
+  get visualMode(): VisualMode {
+    return this.#mode;
+  }
+
   selectAt(event: PointerEvent): void {
     const rect = this.renderer.domElement.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -315,6 +324,11 @@ export class TwinScene {
       z: this.root.position.z,
       rotationY: this.root.rotation.y,
       scale: this.root.scale.x,
+      exploded: this.#explode,
+      visualMode: this.#mode,
+      selectedComponentId: this.#selection?.id,
+      modelLabel: this.modelSummary.label,
+      modelSource: this.modelSummary.source,
     };
   }
 

@@ -8,6 +8,8 @@ export interface DemoFrame {
   frame: TrackingFrame;
 }
 
+export const DEMO_DURATION_SECONDS = 12;
+
 export function createDemoFrame(elapsed: number, timestamp: number): DemoFrame {
   let phase: DemoPhase;
   let hands;
@@ -50,9 +52,12 @@ export function createDemoFrame(elapsed: number, timestamp: number): DemoFrame {
 }
 
 export class DemoProvider extends EventTarget {
-  #running = false;
+  #active = false;
+  #paused = false;
   #frameHandle = 0;
   #startedAt = 0;
+  #positionSeconds = 0;
+  #speed = 1;
   #listener?: TrackingListener;
   #phase?: DemoPhase;
 
@@ -60,31 +65,94 @@ export class DemoProvider extends EventTarget {
     this.stop();
     this.#listener = listener;
     this.#startedAt = performance.now();
-    this.#running = true;
+    this.#positionSeconds = 0;
+    this.#active = true;
+    this.#paused = false;
     this.tick();
   }
 
   stop(): void {
-    this.#running = false;
+    this.#active = false;
+    this.#paused = false;
     if (this.#frameHandle) cancelAnimationFrame(this.#frameHandle);
     this.#frameHandle = 0;
     this.#phase = undefined;
+    this.#positionSeconds = 0;
+    this.#listener = undefined;
   }
 
   get running(): boolean {
-    return this.#running;
+    return this.#active;
+  }
+
+  get paused(): boolean {
+    return this.#paused;
+  }
+
+  get speed(): number {
+    return this.#speed;
+  }
+
+  get progress(): number {
+    return this.currentPosition(performance.now()) / DEMO_DURATION_SECONDS;
+  }
+
+  pause(): void {
+    if (!this.#active || this.#paused) return;
+    this.#positionSeconds = this.currentPosition(performance.now());
+    this.#paused = true;
+    if (this.#frameHandle) cancelAnimationFrame(this.#frameHandle);
+    this.#frameHandle = 0;
+    this.dispatchEvent(new Event('playstatechange'));
+  }
+
+  resume(): void {
+    if (!this.#active || !this.#paused) return;
+    this.#startedAt = performance.now();
+    this.#paused = false;
+    this.dispatchEvent(new Event('playstatechange'));
+    this.tick();
+  }
+
+  restart(): void {
+    if (!this.#active) return;
+    this.#positionSeconds = 0;
+    this.#startedAt = performance.now();
+    this.#phase = undefined;
+    this.emitFrame(0, performance.now());
+    this.dispatchEvent(new Event('playstatechange'));
+  }
+
+  setSpeed(value: number): void {
+    if (!Number.isFinite(value)) return;
+    const now = performance.now();
+    this.#positionSeconds = this.currentPosition(now);
+    this.#startedAt = now;
+    this.#speed = Math.min(2, Math.max(0.25, value));
+    this.dispatchEvent(new Event('playstatechange'));
   }
 
   private tick = (): void => {
-    if (!this.#running) return;
+    if (!this.#active || this.#paused) return;
     const now = performance.now();
-    const elapsed = ((now - this.#startedAt) / 1000) % 12;
+    this.emitFrame(this.currentPosition(now), now);
+    this.#frameHandle = requestAnimationFrame(this.tick);
+  };
+
+  private currentPosition(now: number): number {
+    if (!this.#active || this.#paused) return this.#positionSeconds;
+    return (
+      (this.#positionSeconds + ((now - this.#startedAt) / 1000) * this.#speed) %
+      DEMO_DURATION_SECONDS
+    );
+  }
+
+  private emitFrame(elapsed: number, now: number): void {
     const { frame, phase } = createDemoFrame(elapsed, now);
     if (phase !== this.#phase) {
       this.#phase = phase;
       this.dispatchEvent(new CustomEvent<DemoPhase>('phasechange', { detail: phase }));
     }
     this.#listener?.(frame);
-    this.#frameHandle = requestAnimationFrame(this.tick);
-  };
+  }
 }
