@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible application defect
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach identifiable camera frames or exported landmarks without consent.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Observed and expected behavior
+      description: Explain what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include steps and whether the issue reproduces with ?demo=1.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, OS, and commit
+      placeholder: Edge 140, Windows 11, commit abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant diagnostics
+      description: Paste non-sensitive measured values from the diagnostics panel.

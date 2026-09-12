@@ -1,36 +1,11 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-venv/
-env/
-ENV/
-.venv
-
 # Node
 node_modules/
+dist/
+coverage/
+*.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-# package-lock.json should be committed for consistent installs
 
 # IDE
 .vscode/
@@ -40,13 +15,10 @@ yarn-error.log*
 *~
 .DS_Store
 
-# Flask
-instance/
-.webassets-cache
-
 # Environment variables
 .env
 .env.local
+.env.*.local
 
 # Logs
 *.log
