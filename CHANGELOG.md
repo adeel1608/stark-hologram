@@ -19,6 +19,9 @@ This project follows semantic versioning once release tags are created. Entries 
 
 - Local GLB and CORS-enabled GLB/glTF URL import with validation, race-safe replacement, automatic centering/scaling, semantic mesh discovery, and procedural fallback.
 - Keyboard-accessible component navigation and renderer memory diagnostics.
+- Pause, restart, and playback-speed controls for deterministic synthetic demo replay.
+- Versioned benchmark-session metadata, richer gesture/depth/model observations, explicit privacy guidance, and bounded recent-sample retention.
+- Browser-level regression coverage for fallback controls, camera denial, demo playback, component actions, persistence, and responsive layouts.
 
 ### Remaining
 

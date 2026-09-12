@@ -6,14 +6,26 @@ The application records raw observations needed for a future commodity-camera sp
 
 ## Recorded fields
 
-- timestamp and input source;
-- measured inference duration and hand count;
-- handedness labels;
-- gesture candidate/active state, hold time, heuristic quality, and interaction event;
-- relative-depth palm scale, raw/filtered value, baseline, and stability;
-- model X/Y/Z position.
+Every `spatial-hmi-benchmark/v2` export includes session metadata entered or observed at
+capture time: session/start/end identifiers, application version and commit, browser user agent,
+test device, camera label and actual resolution, lighting condition, optional measured distance,
+and free-form notes.
 
-Exports are local JSON (`spatial-hmi-benchmark/v1`) or CSV files. Begin and end a recording from Diagnostics. Recordings are capped in memory to prevent an unbounded browser session.
+Each observation records:
+
+- frame timestamp, input source, measured tracking rate/inference duration, and hand count;
+- handedness labels and task-provided handedness scores;
+- gesture state/transition, hold time, rule-based heuristic quality, activation latency, tracking
+  loss, and interaction event;
+- relative-depth palm scale, raw/filtered value, baseline, temporal stability, calibration-window
+  variation, and feature disagreement;
+- selected component, model X/Y/Z position, rotation, scale, exploded amount, visual mode, model
+  label, and model source.
+
+Begin and end a recording explicitly from Diagnostics, then download local JSON or CSV. The CSV
+repeats session metadata on each row so it can be filtered without a second table. The recorder
+retains the most recent 36,000 observations in a ring buffer and reports how many older samples
+were overwritten. It neither scores nor labels a session as successful.
 
 ## Proposed study matrix
 
@@ -41,4 +53,7 @@ Do not fill this table without performing the trials.
 5. Keep failed attempts; label exclusions and their reasons separately.
 6. Analyze outside the app with a versioned script and publish raw anonymized data only with participant consent.
 
-Camera imagery is not recorded by the current instrumentation. Landmark coordinates can still be biometric/identifying data; handle exported sessions accordingly.
+The capture contains no camera frames, audio, or landmark coordinates and is never uploaded by
+the application. Browser/device labels, free-form notes, and behavioral timing can still be
+sensitive or identifying. Obtain participant consent, avoid names in notes, store exports under
+the study's retention policy, and publish only reviewed/anonymized data.

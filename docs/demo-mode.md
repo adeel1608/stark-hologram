@@ -4,6 +4,10 @@ Demo mode makes the entire interaction architecture explorable without camera ha
 
 Start it with **Try demo** or `?demo=1`. The loop is deterministic and compact: it generates 21 landmarks per hand rather than storing video.
 
+The camera panel exposes pause/resume, restart, and 0.5–2× playback controls. They make a phase
+repeatable during explanation and browser testing; changing speed does not turn synthetic timing
+into a hardware performance measurement.
+
 The 12-second session demonstrates:
 
 1. point/hover;

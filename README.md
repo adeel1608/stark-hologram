@@ -103,7 +103,12 @@ Press `D` or choose **Open measured diagnostics**. The panel reports only runtim
 - Three.js render FPS, triangle count, and registered component count;
 - active tracking and telemetry sources.
 
-Recording exports raw session observations as JSON or CSV. It does not calculate or claim benchmark results. The reproducible hardware protocol is in [benchmarking](docs/benchmarking.md).
+Recording is opt-in and exports raw session observations as versioned JSON or CSV. The app does
+not capture camera frames, audio, or landmark coordinates, does not upload the export, and does not
+calculate or claim benchmark results. Device labels, notes, and interaction timing may still be
+sensitive: obtain consent, avoid participant names, and handle files under the study's retention
+policy. The reproducible hardware protocol and capture checklist are in
+[benchmarking](docs/benchmarking.md).
 
 ## Development
 
@@ -113,6 +118,7 @@ Requires Node.js 22.13 or newer (Vitest 5's supported runtime floor).
 npm ci
 npm run dev
 npm run test:run
+npm run test:e2e
 npm run typecheck
 npm run lint
 npm run build
@@ -168,7 +174,7 @@ The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendo
 1. Run and publish the documented camera/distance/lighting study without fabricating results.
 2. Validate contributor-supplied industrial GLB assets and refine semantic metadata conventions.
 3. Move MediaPipe inference to a worker if measured UI contention justifies it.
-4. Add recorded landmark-session import and replay.
+4. Add a consented, privacy-reviewed landmark-session format only if deterministic synthetic replay is insufficient.
 5. Implement provider adapters for ROS 2/WebSocket/MQTT telemetry.
 6. Explore native TrueDepth, mobile orientation, WebXR, and learned temporal classifiers as separate research tracks.
 

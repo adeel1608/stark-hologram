@@ -15,7 +15,26 @@ Camera labels may be hidden until permission has been granted. Labels come from 
 5. Switching first stops every track, then requests the new source.
 6. Track end/disconnect moves the UI to an error state and leaves demo/fallback controls available.
 
-Saved data includes device ID, capture preferences, mirror preference, and calibration—not video frames.
+Saved browser data includes device ID, capture preferences, mirror preference, onboarding state,
+and relative-depth calibration—not video frames. Benchmark files are produced only after an
+explicit recording and download action. They contain session labels and interaction observations,
+not imagery, audio, or landmark coordinates, and the app has no upload path.
+
+## Capture checklist
+
+Before a human-participant or hardware session:
+
+1. explain what the camera processes and what the benchmark export contains;
+2. obtain the consent required by the study owner and local policy;
+3. remove names and other direct identifiers from the notes field;
+4. record the actual browser-reported source and resolution without inferring hardware identity;
+5. confirm the intended distance and lighting condition independently;
+6. close unrelated camera applications and rebaseline at the start of each block;
+7. stop capture before reviewing or exporting, then store the file only in the approved location;
+8. delete working copies according to the declared retention schedule.
+
+The repository does not provide ethics approval, participant consent, secure research storage, or
+an anonymization guarantee. Those remain responsibilities of the study operator.
 
 Camera starts are generation-guarded: if source changes overlap, only the newest request may become active and every late stream is stopped. A failed `video.play()`, empty video stream, or tracker startup also releases capture resources. Preferred size and frame-rate values use standard ideal constraints; an overconstrained result is retried without those preferences while preserving an explicitly selected device.
 
