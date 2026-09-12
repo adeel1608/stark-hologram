@@ -1,0 +1,53 @@
+name: Hardware validation record
+description: Record a real camera/lighting/distance matrix run without generalizing beyond the setup.
+title: 'validation: '
+labels: [hardware-validation]
+body:
+  - type: markdown
+    attributes:
+      value: Use the documented protocol. A passing run is evidence for this setup only, not a universal compatibility claim.
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+    validations:
+      required: true
+  - type: input
+    id: camera
+    attributes:
+      label: Physical source, connection, and browser-visible label
+    validations:
+      required: true
+  - type: input
+    id: conditions
+    attributes:
+      label: Actual resolution, lighting, and measured distance
+    validations:
+      required: true
+  - type: textarea
+    id: matrix
+    attributes:
+      label: Results
+      description: Record every attempted case, including failures and exclusions with reasons.
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Redacted artifact locations
+      description: Link only consented, reviewed files. Keep raw participant data private.
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Research integrity
+      options:
+        - label: Consent and the applicable retention policy were followed.
+          required: true
+        - label: Results are limited to the documented setup and no failed attempts were silently removed.
+          required: true

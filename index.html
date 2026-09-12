@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A camera-driven spatial interface for robotic digital twins, hand gestures, relative depth and telemetry."
+    />
+    <meta name="theme-color" content="#02070b" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2302070b'/%3E%3Cpath d='M16 20 32 11l16 9v24l-16 9-16-9Zm16-2-9 5 9 5 9-5Zm-10 11v11l7 4V33Zm20 0-7 4v11l7-4Z' fill='%235ce1e6'/%3E%3C/svg%3E"
+    />
+    <title>Spatial Digital Twin Interface</title>
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar panel-cut">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">Spatial HMI / Research Build</p>
+            <h1>Digital Twin Interface</h1>
+          </div>
+        </div>
+        <div class="status-rail" aria-label="System status">
+          <div>
+            <span class="status-dot online"></span><small>Core</small><strong>Ready</strong>
+          </div>
+          <div>
+            <span class="status-dot idle"></span><small>Vision</small
+            ><strong id="vision-summary">Standby</strong>
+          </div>
+          <div>
+            <span class="status-dot demo"></span><small>Source</small
+            ><strong id="source-summary">Simulation</strong>
+          </div>
+        </div>
+        <time id="mission-clock" class="mission-clock" aria-label="Local time"></time>
+      </header>
+
+      <main class="workspace">
+        <aside class="left-rail">
+          <section class="panel panel-cut system-panel">
+            <div class="panel-heading">
+              <span>01</span>
+              <h2>System</h2>
+            </div>
+            <div class="initialization-list" id="initialization-list">
+              <div class="complete"><i></i><span>Rendering core</span><b>Ready</b></div>
+              <div id="camera-step"><i></i><span>Camera source</span><b>Standby</b></div>
+              <div id="tracker-step"><i></i><span>Hand tracker</span><b>Standby</b></div>
+              <div class="complete"><i></i><span>Digital twin</span><b>Loaded</b></div>
+            </div>
+          </section>
+
+          <section class="panel panel-cut interaction-panel">
+            <div class="panel-heading">
+              <span>02</span>
+              <h2>Interaction</h2>
+            </div>
+            <div class="mode-readout">
+              <small>Active state</small>
+              <strong id="gesture-state">IDLE</strong>
+              <span id="gesture-detail">Mouse and keyboard ready</span>
+            </div>
+            <div class="depth-gauge" aria-label="Relative depth">
+              <div class="depth-scale"><span>+</span><i></i><span>−</span></div>
+              <div>
+                <small>Relative Z</small><strong id="depth-value">+0.00</strong
+                ><span>Normalized displacement</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel panel-cut camera-card">
+            <div class="panel-heading">
+              <span>03</span>
+              <h2>Vision Feed</h2>
+            </div>
+            <div class="camera-viewport">
+              <video id="camera-video" autoplay muted playsinline></video>
+              <canvas id="hand-overlay"></canvas>
+              <div id="camera-empty" class="camera-empty">
+                <span class="reticle" aria-hidden="true"></span>
+                <strong>No camera active</strong>
+                <span>Use a browser camera or run the deterministic demo.</span>
+              </div>
+              <span id="camera-resolution" class="camera-resolution">—</span>
+            </div>
+            <div id="demo-transport" class="demo-transport" hidden>
+              <button id="demo-play-button" type="button" aria-label="Pause demo">Pause</button>
+              <button id="demo-restart-button" type="button">Restart</button>
+              <label for="demo-speed"
+                >Speed<select id="demo-speed">
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="2">2×</option>
+                </select></label
+              >
+              <progress id="demo-progress" max="1" value="0">0%</progress>
+              <output id="demo-time">0.0 / 12.0 s</output>
+            </div>
+          </section>
+        </aside>
+
+        <section class="stage" aria-label="Interactive robotic digital twin">
+          <div id="scene-root" class="scene-root"></div>
+          <div class="stage-reticle" aria-hidden="true"><span></span><i></i></div>
+          <div class="axis-readout" aria-label="Model transform">
+            <span><i class="x"></i>X <b id="axis-x">0.00</b></span>
+            <span><i class="y"></i>Y <b id="axis-y">0.00</b></span>
+            <span><i class="z"></i>Z <b id="axis-z">0.00</b></span>
+            <span>EXP <b id="axis-explode">0%</b></span>
+          </div>
+          <div class="stage-caption">
+            <span>DT–R01</span>
+            <div>
+              <strong id="model-title">Articulated Inspection Cell</strong
+              ><small id="model-caption">Procedural reference twin · simulated telemetry</small>
+            </div>
+          </div>
+        </section>
+
+        <aside class="right-rail">
+          <section class="panel panel-cut inspector-panel">
+            <div class="panel-heading">
+              <span>04</span>
+              <h2>Component</h2>
+            </div>
+            <label class="component-picker" for="component-select"
+              >Keyboard component navigator<select id="component-select">
+                <option value="">Robot assembly</option>
+              </select></label
+            >
+            <div class="component-title">
+              <small>Selected node</small>
+              <strong id="component-name">Robot assembly</strong>
+              <span id="component-id">DT–R01 / ROOT</span>
+            </div>
+            <dl class="metadata-grid">
+              <div>
+                <dt>Type</dt>
+                <dd id="component-type">Assembly</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd class="nominal" id="component-status">Simulated</dd>
+              </div>
+              <div>
+                <dt>Material</dt>
+                <dd id="component-material">Composite</dd>
+              </div>
+              <div>
+                <dt>Visibility</dt>
+                <dd id="component-visibility">100%</dd>
+              </div>
+            </dl>
+            <div class="component-actions">
+              <button id="isolate-button" type="button" disabled>Isolate</button>
+              <button id="visibility-button" type="button" disabled>Hide</button>
+              <button id="transparency-button" type="button" disabled>Fade</button>
+              <button id="restore-button" type="button">Restore all</button>
+            </div>
+          </section>
+
+          <section class="panel panel-cut telemetry-panel">
+            <div class="panel-heading">
+              <span>05</span>
+              <h2>Telemetry <em>Sim</em></h2>
+            </div>
+            <div class="telemetry-primary">
+              <div><small>Joint angle</small><strong id="telemetry-angle">+18.4°</strong></div>
+              <svg viewBox="0 0 160 48" role="img" aria-label="Recent joint angle trend">
+                <polyline
+                  id="telemetry-spark"
+                  points="0,35 20,30 40,32 60,20 80,24 100,12 120,16 140,8 160,12"
+                />
+              </svg>
+            </div>
+            <dl class="telemetry-list">
+              <div>
+                <dt>Torque</dt>
+                <dd id="telemetry-torque">12.7 N·m</dd>
+              </div>
+              <div>
+                <dt>Temperature</dt>
+                <dd id="telemetry-temperature">42.1 °C</dd>
+              </div>
+              <div>
+                <dt>Current</dt>
+                <dd id="telemetry-current">2.84 A</dd>
+              </div>
+              <div>
+                <dt>Health</dt>
+                <dd id="telemetry-health">98.2%</dd>
+              </div>
+              <div>
+                <dt>Cycle</dt>
+                <dd id="telemetry-cycle">004281</dd>
+              </div>
+              <div>
+                <dt>Tool</dt>
+                <dd id="telemetry-tool">Ready</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="panel panel-cut mode-panel">
+            <div class="panel-heading">
+              <span>06</span>
+              <h2>Visual Mode</h2>
+            </div>
+            <div class="segmented" id="visual-mode" role="group" aria-label="Visual mode">
+              <button type="button" data-mode="holographic" aria-pressed="true">Holo</button>
+              <button type="button" data-mode="blueprint" aria-pressed="false">Blueprint</button>
+              <button type="button" data-mode="solid" aria-pressed="false">Solid</button>
+              <button type="button" data-mode="diagnostic" aria-pressed="false">Diagnostic</button>
+            </div>
+            <button id="diagnostics-button" class="panel-link" type="button">
+              Open measured diagnostics
+            </button>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="command-bar panel-cut">
+        <div class="mode-badge">
+          <span id="mode-code">HLO</span><strong id="mode-label">Holographic</strong>
+        </div>
+        <div class="command-hints" aria-label="Keyboard shortcuts">
+          <span><kbd>Drag</kbd> Move</span><span><kbd>Wheel</kbd> Depth</span
+          ><span><kbd>Shift</kbd> Rotate</span><span><kbd>E</kbd> Explode</span
+          ><span><kbd>R</kbd> Reset</span>
+        </div>
+        <div class="primary-actions">
+          <button id="help-button" class="quiet-button" type="button">Controls</button>
+          <button id="camera-button" class="quiet-button" type="button">Camera</button>
+          <button id="demo-button" class="primary-button" type="button">
+            <span>▶</span> Try demo
+          </button>
+        </div>
+      </footer>
+    </div>
+
+    <dialog id="settings-dialog" class="system-dialog panel-cut" aria-labelledby="settings-title">
+      <form method="dialog" class="dialog-shell">
+        <header>
+          <div>
+            <p class="eyebrow">Input configuration</p>
+            <h2 id="settings-title">Camera & interaction</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close settings">×</button>
+        </header>
+        <div id="camera-message" class="inline-message" role="status">
+          Camera access starts only when requested.
+        </div>
+        <label
+          >Camera source<select id="camera-select">
+            <option value="">Default browser camera</option>
+          </select></label
+        >
+        <label
+          >Capture resolution<select id="resolution-select">
+            <option value="640x480">640 × 480</option>
+            <option value="960x540" selected>960 × 540</option>
+            <option value="1280x720">1280 × 720</option>
+            <option value="1920x1080">1920 × 1080</option>
+          </select></label
+        >
+        <label
+          >Dominant hand<select id="dominant-hand-select">
+            <option value="auto">Automatic</option>
+            <option value="right">Right</option>
+            <option value="left">Left</option>
+          </select></label
+        >
+        <label class="switch-row"
+          ><span
+            ><strong>Mirror preview</strong
+            ><small>Selfie-style display; tracking coordinates remain consistent.</small></span
+          ><input id="mirror-checkbox" type="checkbox" checked
+        /></label>
+        <label class="switch-row"
+          ><span
+            ><strong>Audio cues</strong
+            ><small>Original synthesized tones. Muted by default.</small></span
+          ><input id="audio-checkbox" type="checkbox"
+        /></label>
+        <label
+          >Audio volume<input
+            id="volume-input"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value="0.24"
+        /></label>
+        <div class="dialog-actions split-actions">
+          <button id="camera-stop-button" class="quiet-button" type="button">Stop camera</button>
+          <button id="camera-start-button" class="primary-button" type="button">
+            Start selected camera
+          </button>
+        </div>
+        <div class="calibration-block">
+          <div>
+            <strong>Relative depth baseline</strong
+            ><span id="calibration-status"
+              >Hold your dominant hand neutral and still after rebaselining.</span
+            >
+            <meter id="calibration-quality" min="0" max="1" value="0">0%</meter>
+          </div>
+          <button id="rebaseline-button" class="quiet-button" type="button">Rebaseline</button>
+          <button id="reset-calibration-button" class="quiet-button" type="button">
+            Reset saved setup
+          </button>
+        </div>
+        <fieldset class="model-import">
+          <legend>Digital twin model</legend>
+          <p>
+            Import a self-contained GLB from this device or load a GLB/glTF URL with CORS access.
+            The procedural robot remains available as the safe fallback.
+          </p>
+          <label for="model-url"
+            >Model URL<input
+              id="model-url"
+              type="url"
+              inputmode="url"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="https://example.com/robot.glb"
+          /></label>
+          <div class="model-import-actions">
+            <button id="model-url-button" class="quiet-button" type="button">Load URL</button>
+            <label class="file-button" for="model-file">Choose local GLB</label>
+            <input id="model-file" type="file" accept=".glb,model/gltf-binary" />
+            <button id="model-restore-button" class="quiet-button" type="button">
+              Restore demo robot
+            </button>
+          </div>
+          <output id="model-status" class="inline-message" aria-live="polite"
+            >Procedural model active · no third-party asset loaded.</output
+          >
+        </fieldset>
+      </form>
+    </dialog>
+
+    <dialog
+      id="diagnostics-dialog"
+      class="system-dialog wide-dialog panel-cut"
+      aria-labelledby="diagnostics-title"
+    >
+      <form method="dialog" class="dialog-shell">
+        <header>
+          <div>
+            <p class="eyebrow">Measured runtime data</p>
+            <h2 id="diagnostics-title">Diagnostics & benchmark capture</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close diagnostics">×</button>
+        </header>
+        <div class="diagnostic-grid">
+          <section>
+            <h3>Camera</h3>
+            <dl>
+              <div>
+                <dt>Source</dt>
+                <dd id="diag-camera-source">Inactive</dd>
+              </div>
+              <div>
+                <dt>Resolution</dt>
+                <dd id="diag-camera-resolution">—</dd>
+              </div>
+              <div>
+                <dt>Frame rate</dt>
+                <dd id="diag-camera-fps">—</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Vision</h3>
+            <dl>
+              <div>
+                <dt>Inference</dt>
+                <dd id="diag-inference">—</dd>
+              </div>
+              <div>
+                <dt>Tracking FPS</dt>
+                <dd id="diag-tracking-fps">—</dd>
+              </div>
+              <div>
+                <dt>Hands</dt>
+                <dd id="diag-hands">0</dd>
+              </div>
+              <div>
+                <dt>Handedness</dt>
+                <dd id="diag-handedness">—</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Gesture</h3>
+            <dl>
+              <div>
+                <dt>State</dt>
+                <dd id="diag-gesture">IDLE</dd>
+              </div>
+              <div>
+                <dt>Hold</dt>
+                <dd id="diag-hold">0 ms</dd>
+              </div>
+              <div>
+                <dt>Heuristic quality</dt>
+                <dd id="diag-quality">—</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Relative depth</h3>
+            <dl>
+              <div>
+                <dt>Palm scale</dt>
+                <dd id="diag-palm-scale">—</dd>
+              </div>
+              <div>
+                <dt>Raw / filtered</dt>
+                <dd id="diag-depth">—</dd>
+              </div>
+              <div>
+                <dt>Baseline / stability</dt>
+                <dd id="diag-baseline">—</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Rendering</h3>
+            <dl>
+              <div>
+                <dt>FPS</dt>
+                <dd id="diag-render-fps">—</dd>
+              </div>
+              <div>
+                <dt>Triangles</dt>
+                <dd id="diag-triangles">—</dd>
+              </div>
+              <div>
+                <dt>Components</dt>
+                <dd id="diag-components">—</dd>
+              </div>
+              <div>
+                <dt>GPU geometries</dt>
+                <dd id="diag-geometries">—</dd>
+              </div>
+              <div>
+                <dt>GPU textures</dt>
+                <dd id="diag-textures">—</dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Data source</h3>
+            <dl>
+              <div>
+                <dt>Telemetry</dt>
+                <dd>Deterministic simulation</dd>
+              </div>
+              <div>
+                <dt>Tracking</dt>
+                <dd id="diag-tracking-source">None</dd>
+              </div>
+              <div>
+                <dt>Samples</dt>
+                <dd id="benchmark-count">0</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+        <fieldset class="benchmark-metadata">
+          <legend>Session metadata</legend>
+          <label for="benchmark-device"
+            >Test device<input
+              id="benchmark-device"
+              type="text"
+              autocomplete="off"
+              placeholder="e.g. laptop + webcam"
+          /></label>
+          <label for="benchmark-lighting"
+            >Lighting<select id="benchmark-lighting">
+              <option value="not recorded">Not recorded</option>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="bright">Bright</option>
+              <option value="backlit">Backlit</option>
+            </select></label
+          >
+          <label for="benchmark-distance"
+            >Distance (m)<input
+              id="benchmark-distance"
+              type="number"
+              min="0.1"
+              max="10"
+              step="0.1"
+              inputmode="decimal"
+              placeholder="Optional"
+          /></label>
+          <label for="benchmark-notes" class="benchmark-notes"
+            >Notes<textarea
+              id="benchmark-notes"
+              rows="2"
+              placeholder="Condition, task, exclusions"
+            ></textarea>
+          </label>
+          <p>
+            Capture starts only when requested. Exports contain observations and labels, never
+            camera frames or landmark coordinates.
+          </p>
+        </fieldset>
+        <div class="benchmark-actions">
+          <span id="benchmark-status">Recorder stopped</span
+          ><button id="record-button" class="primary-button" type="button">Start recording</button
+          ><button id="export-json-button" class="quiet-button" type="button">Export JSON</button
+          ><button id="export-csv-button" class="quiet-button" type="button">Export CSV</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="help-dialog" class="system-dialog panel-cut" aria-labelledby="help-title">
+      <form method="dialog" class="dialog-shell">
+        <header>
+          <div>
+            <p class="eyebrow">Accessible fallback controls</p>
+            <h2 id="help-title">Interaction map</h2>
+          </div>
+          <button class="icon-button" value="close" aria-label="Close controls">×</button>
+        </header>
+        <div class="control-list">
+          <div><kbd>Click</kbd><span>Select a component</span></div>
+          <div><kbd>Drag</kbd><span>Translate X/Y</span></div>
+          <div><kbd>Wheel</kbd><span>Translate relative Z</span></div>
+          <div><kbd>Shift + drag</kbd><span>Rotate twin</span></div>
+          <div><kbd>Ctrl + wheel</kbd><span>Scale twin</span></div>
+          <div><kbd>E</kbd><span>Toggle exploded view</span></div>
+          <div>
+            <kbd>H / B / S / D</kbd><span>Holographic / blueprint / solid / diagnostics</span>
+          </div>
+          <div><kbd>R / F</kbd><span>Reset / fullscreen</span></div>
+        </div>
+        <p class="dialog-note">
+          With vision active: point to aim, pinch and hold to select/grab, move toward or away from
+          the camera for relative Z, and pinch with both hands to rotate, scale and explode.
+        </p>
+      </form>
+    </dialog>
+
+    <dialog
+      id="onboarding-dialog"
+      class="system-dialog onboarding-dialog panel-cut"
+      aria-labelledby="onboarding-title"
+    >
+      <div class="dialog-shell">
+        <header>
+          <div>
+            <p class="eyebrow">First-run orientation</p>
+            <h2 id="onboarding-title">Choose an input path</h2>
+          </div>
+          <button
+            id="onboarding-skip-top"
+            class="icon-button"
+            type="button"
+            aria-label="Skip onboarding"
+          >
+            ×
+          </button>
+        </header>
+        <div id="onboarding-content" class="onboarding-content"></div>
+        <div
+          class="onboarding-progress"
+          id="onboarding-progress"
+          aria-label="Tutorial progress"
+        ></div>
+        <div class="dialog-actions">
+          <button id="onboarding-back" class="quiet-button" type="button">Back</button
+          ><button id="onboarding-skip" class="quiet-button" type="button">Skip</button
+          ><button id="onboarding-next" class="primary-button" type="button">Next</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

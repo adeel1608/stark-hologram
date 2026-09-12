@@ -1,0 +1,32 @@
+name: Camera compatibility report
+description: Share standards-based camera behavior without exposing imagery
+title: 'camera: '
+labels: [camera]
+body:
+  - type: input
+    id: label
+    attributes:
+      label: Browser-visible camera label
+      description: Use the exact label shown by the app; do not infer the underlying phone model.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options: [Built-in, USB, Wi-Fi virtual camera, USB virtual camera, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Requested/actual settings and behavior
+      description: Include resolution, reported FPS, switching, reconnect, and tracking behavior.
+    validations:
+      required: true

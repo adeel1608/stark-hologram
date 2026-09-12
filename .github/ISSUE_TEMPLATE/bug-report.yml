@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible interface, camera, tracking, rendering, or accessibility defect.
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach camera footage, participant data, or device identifiers without consent.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Include the input path (pointer, demo, or camera) and the smallest repeatable sequence.
+      placeholder: |
+        1. Open ...
+        2. Choose ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 140, Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: camera
+    attributes:
+      label: Camera path
+      options:
+        - No camera / pointer controls
+        - Deterministic demo
+        - Built-in or USB webcam
+        - Virtual camera
+        - Other browser-supported source
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics and console output
+      description: Paste redacted text. Explain whether the issue reproduces with ?demo=1.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed secrets and personal/participant data.
+          required: true
+        - label: I checked for an existing issue.
+          required: true

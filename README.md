@@ -1,213 +1,195 @@
-# Stark Hologram
+# Spatial Digital Twin Interface
 
-A hand-tracking controlled 3D holographic interface built with Flask, Three.js, and MediaPipe. Interact with a holographic building visualization using natural hand gestures in real-time. **Now with Orbbec Gemini 336 depth camera integration for real push/pull Z-axis control!**
+A real-time spatial human–machine interface for exploring robotic digital twins with commodity cameras, natural hand gestures, monocular relative depth, telemetry, and Three.js.
 
-**Repository**: https://github.com/adeel1608/stark-hologram
+This is the modern successor to the original **Stark Hologram** prototype. It keeps the useful spatial interaction ideas while replacing the Flask/Orbbec-specific stack, monolithic JavaScript, vendored libraries, and generic building model with a typed, browser-native robotics architecture. The visual language is original: technical cyan geometry, amber state cues, and an engineering HUD—not copied movie assets.
 
-## Features
+> **Project status — v0.2 modernization:** the procedural robot, component tools, input fallbacks, camera manager, MediaPipe hand pipeline, gesture state machine, relative-depth estimator, simulated telemetry, diagnostics, benchmark export, onboarding, and deterministic demo are implemented. Telemetry is explicitly simulated. Real robot, ROS, TrueDepth, and metric depth integrations are future work.
 
-- **Hand Tracking**: Real-time hand gesture recognition using MediaPipe
-- **Depth Camera Integration**: Orbbec Gemini 336 depth streaming for Z-axis push/pull control
-- **3D Visualization**: Interactive holographic building rendered with Three.js
-- **Gesture Controls**:
-  - **Fist (Right Hand)**: Move the building in XZ plane + depth push/pull
-  - **Pinch (Left Hand)**: Select floors and pull them horizontally
-  - **Two-Hand Pinch**: Rotate, scale, and explode floors
-  - **Open Palm (hold)**: Toggle between glass-holo and blueprint modes
-  - **Double Thumbs Up**: Reset to default state
-- **Visual Effects**: Energy beams, particle systems, dynamic lighting
-- **Dual Visual Modes**: Glass-holo (translucent faces) and Blueprint (edges only)
-- **HUD Display**: Real-time status, floor labels, and depth values
-- **WebSocket Bridge**: Bidirectional depth server for real-time depth queries
+## Try it without hardware
 
-## Prerequisites
-
-- Python 3.8+
-- Node.js 14+ (for npm dependencies)
-- Modern web browser with WebRTC support (Chrome, Firefox, Edge)
-- Webcam for hand tracking
-- **Optional**: Orbbec Gemini 336 depth camera for Z-axis control
-
-## Installation
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/adeel1608/stark-hologram.git
-cd stark-hologram
+npm ci
+npm run dev
 ```
 
-Or if you prefer SSH:
-```bash
-git clone git@github.com:adeel1608/stark-hologram.git
-cd stark-hologram
+Open `http://127.0.0.1:5173/?demo=1`, or choose **Try demo** in the interface. The 12-second deterministic sequence sends synthetic 21-landmark hands through the same gesture, relative-depth, overlay, and interaction pipeline used by a live camera.
+
+No camera, robot, backend, iPhone, depth sensor, or paid service is required.
+
+## Core capabilities
+
+- Standards-based multi-camera discovery and switching through `navigator.mediaDevices`
+- Browser camera, built-in webcam, USB webcam, and virtual-camera support without vendor-specific code
+- Current MediaPipe Tasks Hand Landmarker integration for up to two hands, handedness, 21 image landmarks, world landmarks, frame timestamps, and measured inference timing
+- EMA landmark smoothing, extreme-jump protection, pinch hysteresis, candidate/confirmation/release states, temporal gating, and dominant-hand preference
+- Honest monocular **relative Z** from multiple apparent hand-scale features, with automatic/saved baseline, dead zone, smoothing, bounds, stability estimate, and tracking-loss handling
+- Procedural articulated robot cell plus local GLB/URL GLB-glTF import, semantic component discovery, raycast/keyboard selection, highlighting, isolation, visibility control, and exploded view
+- Deterministic simulated telemetry bound to selected components
+- Holographic, blueprint, solid, and diagnostic render modes
+- Mouse and keyboard fallbacks, responsive layout, onboarding, audio controls, and camera-denied/demo paths
+- Measured camera/vision/gesture/depth/render diagnostics and raw JSON/CSV session export
+
+## Interaction map
+
+| Input                 | Action                                        |
+| --------------------- | --------------------------------------------- |
+| Point                 | Aim at a component                            |
+| Pinch and hold        | Confirm selection and start a grab            |
+| Move confirmed pinch  | Translate X/Y                                 |
+| Move hand toward/away | Translate normalized relative Z               |
+| Two confirmed pinches | Rotate, scale, and explode                    |
+| Two open palms, held  | Reset                                         |
+| Click / drag          | Select / translate X/Y                        |
+| Wheel / Ctrl-wheel    | Translate Z / scale                           |
+| Shift-drag            | Rotate                                        |
+| `E`                   | Toggle exploded view                          |
+| `H` / `B` / `S` / `D` | Holographic / blueprint / solid / diagnostics |
+| `R` / `F` / `?`       | Reset / fullscreen / controls                 |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Camera[CameraManager\nMediaDevices] --> Tracker[HandTracker\nMediaPipe Tasks]
+  Demo[DemoProvider\nsynthetic landmarks] --> Smooth[Landmark + intent pipeline]
+  Tracker --> Smooth
+  Smooth --> Gesture[GestureEngine\nhysteresis + temporal state]
+  Smooth --> Depth[DepthProvider\nrelative monocular Z]
+  Pointer[PointerInput\nkeyboard mapping] --> Interaction[InteractionController]
+  Gesture --> Interaction
+  Depth --> Interaction
+  Interaction --> Twin[TwinScene\nThree.js + component registry]
+  Telemetry[TelemetryProvider\ndeterministic simulation] --> HUD[Spatial engineering HUD]
+  Twin --> HUD
+  Interaction --> Recorder[BenchmarkRecorder\nJSON / CSV]
 ```
 
-2. Create and activate virtual environment:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+The core provider boundaries are deliberately small and exercised by real implementations:
 
-3. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-pip install -r requirements_depth.txt
-```
+- `CameraProvider`: browser camera lifecycle and device changes
+- `DepthProvider`: normalized relative-Z readings; replaceable by recorded, TrueDepth, or external depth sources later
+- `TelemetryProvider`: deterministic simulation and recorded playback
+- `InputProvider`: pointer lifecycle, with pure keyboard command mapping
 
-4. Install Node.js dependencies:
-```bash
-npm install
-```
+See [architecture](docs/architecture.md) for ownership and data flow.
 
-5. **(Optional)** Install Orbbec SDK for depth functionality:
-   - See `ORBBEC_INSTALL.md` for detailed instructions
-   - App works without depth (will run in placeholder mode)
+## Relative depth: what it means
 
-## Quick Start
+This build does **not** report metres. It derives a robust apparent palm scale from several normalized landmark distances, compares that scale with a stable neutral baseline, clamps the result to `[-1, +1]`, applies a dead zone, then filters it over time.
 
-See `RUN.md` for detailed run instructions. Quick version:
+`RELATIVE Z +0.28` means displacement relative to the calibrated neutral pose. It is useful for interaction but is not a physical range measurement. See [relative depth](docs/relative-depth.md) for the formula, assumptions, and limitations.
 
-**Terminal 1 - Start Depth Server:**
-```bash
-source .venv/bin/activate
-python depth_server.py
-```
+## Camera setup
 
-**Terminal 2 - Start Web Server:**
-```bash
-source .venv/bin/activate
-python app.py
-```
+1. Choose **Camera**.
+2. Select a source and capture resolution.
+3. Set dominant-hand and mirror preferences.
+4. Start the camera and grant access when the browser asks.
+5. Hold one hand neutral and still while the relative-Z baseline stabilizes.
 
-**Open Browser:** http://127.0.0.1:5000
+An iPhone 13 or iPad exposed by Camo or another standards-compliant virtual-camera tool appears like any other browser camera. Device labels are provided by the browser/driver; the app does not claim to identify an iPhone when only a generic label is available.
 
-## Usage
+Camera frames stay in the browser and are not uploaded by this project. The Hand Landmarker WASM and model are fetched from pinned Google/MediaPipe distribution URLs on first use. Demo and non-vision controls remain available if that download is unavailable. More detail: [camera and privacy](docs/camera.md).
 
-1. Allow camera access when prompted
+## Diagnostics and experiment capture
 
-2. Wait for "online." status in HUD
+Press `D` or choose **Open measured diagnostics**. The panel reports only runtime observations that the app can actually measure or read:
 
-3. Use hand gestures to interact with the holographic building:
-   - Make a fist with your right hand and move it to reposition the building
-   - Pinch with your left hand to select and pull floors
-   - Use two-hand pinch to transform (rotate, scale, explode)
-   - Hold an open palm to toggle wireframe mode
-   - Show double thumbs up to reset
+- browser-reported camera resolution/frame rate;
+- MediaPipe inference time, tracking loop rate, handedness score when available, and hand count;
+- gesture state, hold duration, and clearly labelled heuristic quality;
+- palm-scale inputs, raw/filtered relative Z, baseline, and stability estimate;
+- Three.js render FPS, triangle count, and registered component count;
+- active tracking and telemetry sources.
 
-## Gesture Controls
-
-| Gesture | Action |
-|---------|--------|
-| ✊ Right Hand Fist | Move building in XZ plane + **depth push/pull** |
-| 🤏 Left Hand Pinch | Select floor / Pull selected floor horizontally |
-| 🤏🤏 Two-Hand Pinch | Rotate + Scale building |
-| 🤏🤏 + Hands Up/Down | Explode floors vertically |
-| 🖐 Open Palm (hold) | Toggle glass-holo ⟷ blueprint mode |
-| 👍👍 Double Thumbs Up | Reset to default state |
-| R Key | Reset (keyboard shortcut) |
-
-### Depth Controls (with Orbbec SDK)
-
-When **Right Fist** is active (MOVE mode):
-- **Push hand forward** (toward camera) → building moves closer to you
-- **Pull hand back** (away from camera) → building moves farther away
-- Depth is captured as baseline when fist first detected
-- Movement is smooth and filtered to prevent jitter
-- Small movements (<2cm) are ignored
-
-**Visual Modes:**
-- **Glass-Holo** (default): Translucent cyan faces with crisp edges
-- **Blueprint**: Edges-only technical wireframe (toggle with open palm hold)
-
-## Project Structure
-
-```
-stark-hologram/
-├── app.py                    # Flask web server
-├── depth_server.py           # Orbbec depth WebSocket server
-├── templates/
-│   └── index.html            # Main HTML template
-├── static/
-│   ├── app.js               # Main application logic (hand tracking + depth)
-│   ├── style.css            # Styling
-│   └── vendor/              # Third-party libraries
-│       ├── hands.js         # MediaPipe Hands
-│       ├── camera_utils.js  # MediaPipe Camera
-│       └── three.module.js  # Three.js
-├── requirements.txt          # Python dependencies (Flask)
-├── requirements_depth.txt    # Depth server dependencies
-├── package.json             # Node.js dependencies
-├── README.md                # This file
-├── RUN.md                   # Quick start guide
-├── ORBBEC_INSTALL.md        # Orbbec SDK installation guide
-└── DEPTH_TESTING.md         # Depth integration testing guide
-```
-
-## Technologies
-
-- **Backend**: Flask (Python) + WebSocket server
-- **Frontend**: Vanilla JavaScript (ES6 modules)
-- **3D Graphics**: Three.js
-- **Hand Tracking**: MediaPipe Hands
-- **Depth Sensing**: Orbbec SDK v2 (Python bindings)
-- **Communication**: WebSocket (bidirectional depth queries)
-- **Styling**: CSS3
-
-## Configuration
-
-All tunable parameters are in **one place** at the top of `static/app.js` (lines 9-85):
-
-### Gesture Sensitivity
-- `PINCH_ON_PX` / `PINCH_OFF_PX`: Pinch detection thresholds
-- `FIST_THRESH`: Fist detection threshold
-- `HOLD_*_FRAMES`: Intent gating (prevent accidental triggers)
-
-### Movement
-- `MOVE_SENS`: XZ plane movement sensitivity
-- `MOVE_DEADZONE_PX`: Ignore tiny hand jitter
-
-### Depth (Z-axis)
-- `Z_GAIN`: Push/pull strength (1.8 = moderate, 3.0 = dramatic)
-- `Z_SMOOTH`: Z movement smoothing (0.12 = responsive)
-- `Z_DEADZONE_M`: Ignore depth changes <2cm
-- `Z_CLAMP`: Maximum Z offset in world units
-
-### Visual
-- `ORB_CORE_RADIUS`, `ORB_RING_*`: Orb size (reduced by ~35% from original)
-- `C_CYAN`, `C_AMBER`, `C_BG`: Color palette (Stark minimal)
-- `BEAM_POINTS`: Beam smoothness (18 = straight line)
-
-### Snap/Docking
-- `SNAP_POS`, `SNAP_ROT_DEG`, `SNAP_SCALE_STEP`: Auto-align grid
-- `SNAP_IDLE_DELAY_MS`: Delay before snapping kicks in
-
-See inline comments in CONFIG section for all parameters.
-
-## Browser Compatibility
-
-- Chrome/Edge (recommended)
-- Firefox
-- Safari (may have limited WebRTC support)
+Recording is opt-in and exports raw session observations as versioned JSON or CSV. The app does
+not capture camera frames, audio, or landmark coordinates, does not upload the export, and does not
+calculate or claim benchmark results. Device labels, notes, and interaction timing may still be
+sensitive: obtain consent, avoid participant names, and handle files under the study's retention
+policy. The reproducible hardware protocol and capture checklist are in
+[benchmarking](docs/benchmarking.md).
 
 ## Development
 
-The application runs in debug mode by default. To modify the server configuration, edit `app.py`:
+Requires Node.js 22.13 or newer (Vitest 5's supported runtime floor).
 
-```python
-app.run(host="127.0.0.1", port=5000, debug=True)
+```bash
+npm ci
+npm run dev
+npm run test:run
+npm run test:e2e
+npm run typecheck
+npm run lint
+npm run build
+npm run check
 ```
+
+`npm run check` runs formatting, type checking, linting, unit tests, and the production build. CI
+validates that gate from the lockfile on the minimum supported Node 22.13 line and the current Node
+24 line. Chromium E2E runs once on Node 24 after both core jobs pass.
+
+## Project structure
+
+```text
+src/
+  audio/          synthesized, optional UI cues
+  benchmark/      raw observation recorder/export
+  calibration/    versioned local profile
+  camera/         CameraProvider and MediaDevices manager
+  demo/           deterministic synthetic hand session
+  depth/          DepthProvider and relative-Z estimator
+  digital-twin/   component registry and procedural robot
+  gestures/       pure recognizers, math, state machine
+  input/          pointer provider and keyboard mapping
+  interaction/    gesture/depth to twin transforms
+  rendering/      Three.js scene, selection, modes, GLTF loading
+  telemetry/      simulation/recorded providers
+  vision/         Hand Landmarker, smoothing, overlay, types
+```
+
+The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendored Three.js copies, legacy MediaPipe globals, and `static/app.js` are preserved in Git history rather than active source.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [Camera and privacy](docs/camera.md)
+- [Gesture engine](docs/gestures.md)
+- [Relative depth](docs/relative-depth.md)
+- [Digital twin](docs/digital-twin.md)
+- [Demo mode](docs/demo-mode.md)
+- [Benchmark protocol](docs/benchmarking.md)
+- [Measured performance and bundle notes](docs/performance.md)
+- [Physical portfolio capture checklist](docs/capture-checklist.md)
+- [Portfolio and research notes](docs/portfolio.md)
+- [Dependencies and asset licensing](docs/dependencies.md)
+
+## Limitations
+
+- Monocular relative depth is pose- and camera-dependent and is intentionally non-metric.
+- MediaPipe model initialization currently needs network access; inference is then local in the browser.
+- Camera and inference performance depends on the browser, camera driver, lighting, and CPU/GPU.
+- This session did not physically validate iPhone/Camo, iPad, or generic webcam paths; the required manual matrix is documented.
+- Local GLB and CORS-enabled GLB/glTF URL import are available from settings. Imported meshes receive semantic fallbacks, safe cloned materials, automatic centering/scaling, selection, disposal, and procedural fallback. The repository still carries no third-party robot-asset licensing burden.
+- Telemetry is simulated and clearly labelled; there is no live robot connectivity yet.
+- Installable/offline PWA support is intentionally deferred: first-use MediaPipe WASM/model assets
+  are external, so a manifest alone would imply an offline guarantee the current build cannot keep.
+
+## Roadmap
+
+1. Run and publish the documented camera/distance/lighting study without fabricating results.
+2. Validate contributor-supplied industrial GLB assets and refine semantic metadata conventions.
+3. Move MediaPipe inference to a worker if measured UI contention justifies it.
+4. Add a consented, privacy-reviewed landmark-session format only if deterministic synthetic replay is insufficient.
+5. Implement provider adapters for ROS 2/WebSocket/MQTT telemetry.
+6. Explore native TrueDepth, mobile orientation, WebXR, and learned temporal classifiers as separate research tracks.
+
+The version progression is tracked in [CHANGELOG.md](CHANGELOG.md); future milestones are plans, not completed releases.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [SECURITY.md](SECURITY.md) for private vulnerability reporting and camera/privacy expectations.
 
 ## License
 
-ISC
-
-## Author
-
-[adeel1608](https://github.com/adeel1608)
-
-## Acknowledgments
-
-- MediaPipe for hand tracking technology
-- Three.js for 3D graphics framework
-- Flask for the web framework
-
+[ISC](LICENSE) © 2026 adeel1608.
