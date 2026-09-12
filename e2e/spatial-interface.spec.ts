@@ -62,7 +62,8 @@ test('reports camera permission denial and keeps demo available', async ({ page 
   await page.getByRole('button', { name: 'Start selected camera' }).click();
   await expect(page.locator('#camera-message')).toContainText('Camera access was denied');
   await page.getByRole('button', { name: 'Close settings' }).click();
-  await expect(page.getByRole('button', { name: /Try demo/ })).toBeVisible();
+  await page.getByRole('button', { name: /Try demo/ }).click();
+  await expect(page.locator('#camera-resolution')).toHaveText('SYNTHETIC');
 });
 
 test('supports component actions, visual modes, explode, and reset', async ({ page }) => {
@@ -75,14 +76,24 @@ test('supports component actions, visual modes, explode, and reset', async ({ pa
   await expect(page.locator('#component-visibility')).toHaveText('100%');
   await page.getByRole('button', { name: 'Isolate' }).click();
   await page.getByRole('button', { name: 'Restore all' }).click();
-  await page.getByRole('button', { name: 'Blueprint' }).click();
-  await expect(page.locator('#mode-code')).toHaveText('BLU');
+  for (const [name, code] of [
+    ['Blueprint', 'BLU'],
+    ['Solid', 'SLD'],
+    ['Diagnostic', 'DIA'],
+    ['Holo', 'HLO'],
+  ] as const) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await expect(page.locator('#mode-code')).toHaveText(code);
+  }
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('e');
   await expect(page.locator('#axis-explode')).toHaveText('100%');
   await page.locator('body').press('r');
   await expect(page.locator('#axis-explode')).toHaveText('0%');
   await expect(page.locator('#component-select')).toHaveValue('');
+  await page.keyboard.press('Shift+/');
+  await expect(page.getByRole('dialog', { name: 'Interaction map' })).toBeVisible();
+  await page.keyboard.press('Escape');
 });
 
 test('replays synthetic landmarks and records labelled benchmark observations', async ({
@@ -136,6 +147,7 @@ for (const viewport of [
   { name: 'mobile', width: 390, height: 844 },
   { name: 'tablet', width: 820, height: 1180 },
   { name: 'laptop', width: 1366, height: 768 },
+  { name: 'standard', width: 1440, height: 900 },
   { name: 'desktop', width: 1920, height: 1080 },
 ]) {
   test(`fits the ${viewport.name} viewport and captures a review image`, async ({

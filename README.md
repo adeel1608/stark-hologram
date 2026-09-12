@@ -157,6 +157,7 @@ The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendo
 - [Digital twin](docs/digital-twin.md)
 - [Demo mode](docs/demo-mode.md)
 - [Benchmark protocol](docs/benchmarking.md)
+- [Physical portfolio capture checklist](docs/capture-checklist.md)
 - [Portfolio and research notes](docs/portfolio.md)
 - [Dependencies and asset licensing](docs/dependencies.md)
 
@@ -168,6 +169,8 @@ The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendo
 - This session did not physically validate iPhone/Camo, iPad, or generic webcam paths; the required manual matrix is documented.
 - Local GLB and CORS-enabled GLB/glTF URL import are available from settings. Imported meshes receive semantic fallbacks, safe cloned materials, automatic centering/scaling, selection, disposal, and procedural fallback. The repository still carries no third-party robot-asset licensing burden.
 - Telemetry is simulated and clearly labelled; there is no live robot connectivity yet.
+- Installable/offline PWA support is intentionally deferred: first-use MediaPipe WASM/model assets
+  are external, so a manifest alone would imply an offline guarantee the current build cannot keep.
 
 ## Roadmap
 

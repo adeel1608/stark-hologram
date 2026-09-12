@@ -22,6 +22,7 @@ This project follows semantic versioning once release tags are created. Entries 
 - Pause, restart, and playback-speed controls for deterministic synthetic demo replay.
 - Versioned benchmark-session metadata, richer gesture/depth/model observations, explicit privacy guidance, and bounded recent-sample retention.
 - Browser-level regression coverage for fallback controls, camera denial, demo playback, component actions, persistence, and responsive layouts.
+- Structured bug/hardware-validation issue forms and a privacy-aware physical portfolio capture checklist.
 
 ### Remaining
 
