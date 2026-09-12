@@ -759,5 +759,6 @@ window.addEventListener('beforeunload', () => {
   camera.dispose();
   pointerInput.stop();
   audio.dispose();
+  telemetry.dispose();
   scene.dispose();
 });

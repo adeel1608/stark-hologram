@@ -157,6 +157,7 @@ The old Flask server, broken Orbbec bridge, Python requirements, duplicate vendo
 - [Digital twin](docs/digital-twin.md)
 - [Demo mode](docs/demo-mode.md)
 - [Benchmark protocol](docs/benchmarking.md)
+- [Measured performance and bundle notes](docs/performance.md)
 - [Physical portfolio capture checklist](docs/capture-checklist.md)
 - [Portfolio and research notes](docs/portfolio.md)
 - [Dependencies and asset licensing](docs/dependencies.md)

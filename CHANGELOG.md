@@ -14,6 +14,7 @@ This project follows semantic versioning once release tags are created. Entries 
 - Preserve a saved depth baseline across ordinary scene and gesture resets.
 - Disconnect resize/pointer listeners and dispose Three.js geometry, material, texture, skeleton, and renderer resources.
 - Preserve original visibility and material state across isolate, fade, visualization-mode, and restore transitions.
+- Pre-index recorded telemetry channels instead of allocating a filtered sample list on every HUD poll.
 
 ### Added
 

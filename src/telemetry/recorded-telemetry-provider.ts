@@ -2,18 +2,25 @@ import type { TelemetryProvider, TelemetrySample } from './types';
 
 export class RecordedTelemetryProvider implements TelemetryProvider {
   readonly source = 'recorded' as const;
+  readonly #samples: TelemetrySample[];
+  readonly #samplesByChannel = new Map<string, TelemetrySample[]>();
   #paused = false;
   #startedAt = performance.now();
   #pausedAt = 0;
 
-  constructor(private readonly samples: TelemetrySample[]) {
+  constructor(samples: TelemetrySample[]) {
     if (samples.length === 0) throw new Error('Recorded telemetry requires at least one sample');
+    this.#samples = [...samples].sort((left, right) => left.timestamp - right.timestamp);
+    for (const sample of this.#samples) {
+      const channelSamples = this.#samplesByChannel.get(sample.channel);
+      if (channelSamples) channelSamples.push(sample);
+      else this.#samplesByChannel.set(sample.channel, [sample]);
+    }
   }
 
   sample(timestamp: number, channel: string): TelemetrySample {
     const elapsed = this.#paused ? this.#pausedAt : timestamp - this.#startedAt;
-    const matching = this.samples.filter((sample) => sample.channel === channel);
-    const source = matching.length > 0 ? matching : this.samples;
+    const source = this.#samplesByChannel.get(channel) ?? this.#samples;
     const finalTimestamp = source.at(-1)?.timestamp ?? 0;
     const previousTimestamp = source.at(-2)?.timestamp ?? 0;
     const duration = finalTimestamp + Math.max(finalTimestamp - previousTimestamp, 1);
@@ -42,6 +49,11 @@ export class RecordedTelemetryProvider implements TelemetryProvider {
 
   reset(): void {
     this.#startedAt = performance.now();
+    this.#pausedAt = 0;
+  }
+
+  dispose(): void {
+    this.#paused = true;
     this.#pausedAt = 0;
   }
 }

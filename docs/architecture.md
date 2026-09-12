@@ -40,6 +40,15 @@ sequenceDiagram
 
 The interface exposes timestamped channel samples plus pause/resume/reset. The deterministic simulation and recorded playback providers share it. A WebSocket/REST/ROS adapter can be added without changing the inspector.
 
+An external adapter must normalize its input into `TelemetrySample`, preserve the upstream sample
+timestamp, map stable component channels to the registry's `telemetryChannel`, and implement
+idempotent pause/resume/reset/dispose behavior. Network ownership belongs inside the adapter: connect and
+reconnect with bounded backoff, validate every message before publishing it, retain at most the
+latest sample per channel (or a documented bounded history), expose stale/disconnected state rather
+than substituting nominal values, and close sockets/timers on disposal. ROS 2 should enter through a
+separate bridge (for example, rosbridge/WebSocket) with an explicit topic-to-channel mapping; this
+browser build does not claim direct ROS 2 connectivity.
+
 ### InputProvider
 
 The pointer provider owns reversible event registration. Keyboard commands are a pure map and feed the same scene methods. Camera gestures and demo landmarks converge in `InteractionController`.

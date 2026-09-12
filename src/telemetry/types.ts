@@ -1,6 +1,6 @@
 export interface TelemetrySample {
   timestamp: number;
-  source: 'simulation' | 'recorded';
+  source: 'simulation' | 'recorded' | 'external';
   channel: string;
   jointAngleDeg: number;
   torqueNm: number;
@@ -17,4 +17,5 @@ export interface TelemetryProvider {
   pause(): void;
   resume(): void;
   reset(): void;
+  dispose(): void;
 }

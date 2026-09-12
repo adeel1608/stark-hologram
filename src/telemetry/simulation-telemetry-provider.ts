@@ -62,4 +62,9 @@ export class SimulationTelemetryProvider implements TelemetryProvider {
     this.#pauseStarted = undefined;
     this.#timeOffset = performance.now();
   }
+
+  dispose(): void {
+    this.#pausedAt = undefined;
+    this.#pauseStarted = undefined;
+  }
 }
