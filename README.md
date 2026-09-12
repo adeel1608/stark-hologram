@@ -125,7 +125,9 @@ npm run build
 npm run check
 ```
 
-`npm run check` runs type checking, linting, unit tests, and the production build. CI runs the same gate from the lockfile.
+`npm run check` runs formatting, type checking, linting, unit tests, and the production build. CI
+validates that gate from the lockfile on the minimum supported Node 22.13 line and the current Node
+24 line. Chromium E2E runs once on Node 24 after both core jobs pass.
 
 ## Project structure
 
